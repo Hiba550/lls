@@ -1,0 +1,2805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive YBS Machine Circuit Board Layout - Assembly Verification</title>
+    <style>
+        :root {
+            --left-pcb-color: #b5e6b5;
+            --master-pcb-color: #d3d3d3;
+            --right-pcb-color: #a8e4f0;
+            --highlight-yellow: #ffeb3b;
+            --board-to-board-color: #999;
+            --board-to-board-green: #5c9e31;
+            --border-color: #aaa;
+            --hover-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+            --transition-speed: 0.2s;
+            --bg-color-body: #f8f8f8;
+            --bg-color-container: #fff;
+            --text-color-dark: #333;
+            --text-color-light: #f1f5f9;
+            --header-border-color: #ddd;
+            --component-name-bg: #e9ecef;
+            --component-name-text: var(--text-color-dark);
+            --tooltip-bg: rgba(54, 69, 79, 0.95);
+            --tooltip-text: var(--text-color-light);
+            --status-success: #4ade80;
+            --status-error: #f87171;
+            --status-pending: #cbd5e1;
+            --progress-bg: #e2e8f0;
+            --progress-fill: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 1.5rem;
+            background-color: var(--bg-color-body);
+            color: var(--text-color-dark);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--bg-color-container);
+            border-radius: 0.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--header-border-color);
+        }
+
+        .title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-color-dark);
+            margin-bottom: 0.75rem;
+            text-shadow: 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .part-id {
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #f97316;
+            color: var(--text-color-light);
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .board-to-board-title {
+            color: #38bdf8;
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin: 1.5rem 0;
+            text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
+            position: relative;
+        }
+
+        .board-to-board-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+        }
+
+        .circuit-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1.5px solid var(--border-color);
+            border-radius: 0.375rem;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 10;
+            background-color: #fff;
+        }
+
+        .circuit-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.25rem;
+            font-size: 0.75rem;
+            height: 2.5rem;
+            position: relative;
+            transition: all var(--transition-speed) ease;
+        }
+
+        .component-name {
+            text-align: left;
+            font-weight: 700;
+            padding-left: 1rem;
+            background-color: var(--component-name-bg);
+            color: var(--component-name-text);
+            width: 8rem;
+            vertical-align: middle;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .component-name::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,0,0,0.05));
+        }
+
+        .cell {
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition-speed) ease;
+        }
+
+        .cell:hover {
+            transform: scale(1.05);
+            box-shadow: var(--hover-shadow);
+            z-index: 100;
+        }
+
+        .sensor-cell {
+            width: 1.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background-color: #fff9e6;
+            vertical-align: middle;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .sensor-cell.success {
+            background-color: var(--status-success);
+            color: white;
+        }
+
+        .sensor-cell.error {
+            background-color: var(--status-error);
+            color: white;
+        }
+
+        .sensor-cell.next {
+            background-color: var(--highlight-yellow);
+            animation: pulse 2s infinite;
+        }
+
+        .highlighted-sensor {
+            background-color: var(--highlight-yellow);
+            font-weight: 700;
+            color: #333;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .highlighted-sensor::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 0.5rem;
+            height: 0.5rem;
+            background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%);
+        }
+
+        .left-pcb {
+            background-color: var(--left-pcb-color);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .left-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .master-pcb {
+            background-color: var(--master-pcb-color);
+            color: var(--text-color-dark);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .master-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .right-pcb {
+            background-color: var(--right-pcb-color);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .right-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .board-to-board {
+            background-color: var(--board-to-board-color);
+            color: var(--text-color-light);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.2;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+            cursor: pointer;
+        }
+
+        .board-to-board-green {
+            background-color: var(--board-to-board-green);
+            color: var(--text-color-light);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.2;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+            cursor: pointer;
+        }
+
+        .power-cable {
+            background-color: #ffffff;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.75rem 0.25rem;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, #f9f9f9, #ffffff);
+            cursor: pointer;
+        }
+
+        .empty-cell {
+            background-color: #ffffff;
+        }
+
+        .circuit-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .circuit-lines::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 40% 70%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 50% 40%, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+            background-size: 100px 100px;
+        }
+
+        .glow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05), transparent 70%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: var(--tooltip-bg);
+            color: var(--tooltip-text);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 200px;
+            z-index: 1000;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            transform: translateY(10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 0 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent var(--tooltip-bg);
+        }
+
+        .connection-line {
+            position: absolute;
+            background: rgba(56, 189, 248, 0.4);
+            height: 2px;
+            z-index: 15;
+            transform-origin: left;
+            transform: scaleX(0);
+            pointer-events: none;
+        }
+
+        .connection-line.active {
+            transform: scaleX(1);
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0.5); }
+            70% { box-shadow: 0 0 0 8px rgba(255, 235, 59, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .scan-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #f1f5f9;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+        }
+
+        .scan-input-container {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .scan-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+        }
+
+        .scan-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .scan-button:hover {
+            background-color: #2563eb;
+        }
+
+        .scan-button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin: 1.5rem 0;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-label {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .progress-percentage {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+
+        .progress-bar {
+            height: 0.5rem;
+            background-color: var(--progress-bg);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--progress-fill);
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+        }
+
+        .logs-container {
+            margin-top: 1.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            background-color: white;
+        }
+
+        .log-header {
+            padding: 0.75rem 1rem;
+            background-color: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .log-entry {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-time {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+
+        .log-message {
+            flex: 1;
+            margin-left: 1rem;
+        }
+
+        .log-entry.success .log-message {
+            color: #16a34a;
+        }
+
+        .log-entry.error .log-message {
+            color: #dc2626;
+        }
+
+        .log-entry.info .log-message {
+            color: #2563eb;
+        }
+
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            max-width: 24rem;
+            opacity: 0;
+            transform: translateY(-1rem);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification.success {
+            background-color: #16a34a;
+        }
+
+        .notification.error {
+            background-color: #dc2626;
+        }
+
+        .notification.info {
+            background-color: #2563eb;
+        }
+
+        @media (max-width: 992px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .component-name {
+                width: 6rem;
+                font-size: 0.7rem;
+            }
+
+            .sensor-cell {
+                width: 1.5rem;
+                font-size: 0.75rem;
+                padding: 0.25rem 0.125rem;
+            }
+
+            .left-pcb, .master-pcb, .right-pcb {
+                font-size: 0.65rem;
+                padding: 0.5rem 0.125rem;
+            }
+
+            .power-cable {
+                font-size: 0.75rem;
+            }
+
+            .scan-input-container {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 1.5rem;
+            }
+
+            .board-to-board-title {
+                font-size: 1.75rem;
+            }
+
+            .circuit-table {
+                font-size: 0.65rem;
+            }
+
+            .component-name {
+                width: 5rem;
+            }
+        }
+
+        .complete-button {
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .complete-button:hover {
+            background-color: #15803d;
+        }
+
+        .complete-button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .restart-button {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #f97316;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .restart-button:hover {
+            background-color: #ea580c;
+        }
+
+        .scan-controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .scan-controls button {
+            flex: 1;
+        }
+
+        .retry-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .retry-button:hover {
+            background-color: #4b5563;
+        }
+        
+        .notification-error {
+            background-color: #ef4444;
+            color: white;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+    </style>
+    <!-- Add this script in the head or before your existing script -->
+    <script>
+        // Get query parameters from URL
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+        
+        // Store the assembly ID in localStorage on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const assemblyId = getQueryParam('id');
+            if (assemblyId) {
+                localStorage.setItem('currentYBSAssemblyId', assemblyId);
+            }
+        });
+
+        // Add this to your 5YB011057.html file script
+        window.addEventListener('message', function(event) {
+            // Check if we're getting a message from our parent with an assembly ID
+            if (event.data && event.data.type === 'setAssemblyId') {
+                const newAssemblyId = event.data.assemblyId;
+                if (newAssemblyId) {
+                    assemblyId = newAssemblyId;
+                    localStorage.setItem('currentYBSAssemblyId', newAssemblyId);
+                    
+                    // If we're already loaded, force a reload of the assembly state
+                    if (document.readyState === 'complete') {
+                        loadAssemblyState().then(loaded => {
+                            if (loaded) {
+                                addLogEntry(`Loaded assembly #${newAssemblyId}`, 'info');
+                            }
+                        });
+                    }
+                }
+            }
+        });
+    </script>
+    <!-- Add this at the beginning of your script section -->
+    <script>
+        // Send a message to the parent window when loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'YBS_ASSEMBLY_LOADED' }, '*');
+            }
+        });
+
+        // Modify the createAssemblyProcess function to use a default YBS work order if none provided
+        async function createAssemblyProcess(workOrderId) {
+            try {
+                // Get available work orders first
+                const workOrdersResponse = await fetch('/api/work-order/');
+                
+                if (!workOrdersResponse.ok) {
+                    throw new Error('Failed to fetch work orders');
+                }
+                
+                const workOrders = await workOrdersResponse.json();
+                
+                // Filter for YBS/RAP work orders
+                const ybsWorkOrders = Array.isArray(workOrders) 
+                    ? workOrders.filter(order => 
+                        (order.product && (order.product.includes('YBS') || order.product.includes('RAP'))) || 
+                        (order.item_code && order.item_code.includes('5YB'))
+                      )
+                    : [];
+                
+                // If no work order ID provided, use the first YBS work order
+                let finalWorkOrderId = workOrderId;
+                if (!finalWorkOrderId && ybsWorkOrders.length > 0) {
+                    finalWorkOrderId = ybsWorkOrders[0].id;
+                    console.log('Using default YBS work order ID:', finalWorkOrderId);
+                }
+                
+                if (!finalWorkOrderId) {
+                    throw new Error('No suitable YBS work order found. Please create one first.');
+                }
+                
+                // Show processing notification
+                showNotification('Creating new assembly process...', 'info');
+                
+                const response = await fetch(`/api/assembly-process/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        work_order: finalWorkOrderId,
+                        created_by: 'Current User',
+                        status: 'pending'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Failed to create assembly process: ${JSON.stringify(errorData)}`);
+                }
+                
+                const data = await response.json();
+                assemblyId = data.id;
+                
+                // Update URL with assembly ID without reloading page
+                const url = new URL(window.location);
+                url.searchParams.set('id', assemblyId);
+                window.history.pushState({}, '', url);
+                
+                showNotification(`New assembly process created: ${data.serial_number}`, 'success');
+                addLogEntry(`Started new assembly with Serial #${data.serial_number}`, 'info');
+                
+                return data;
+            } catch (error) {
+                console.error('Error creating assembly process:', error);
+                showNotification('Failed to create assembly process. Please try again.', 'error');
+                addLogEntry('Error: Failed to create assembly process', 'error');
+                return null;
+            }
+        }
+
+        // Also modify loadAssemblyState to handle dynamic work order creation
+        async function loadAssemblyState() {
+            // First check if there's an assembly ID in the URL
+            const id = getAssemblyId();
+            if (!id) {
+                // Try to create a new assembly with the first available YBS work order
+                const newAssembly = await createAssemblyProcess();
+                if (newAssembly) {
+                    assemblyId = newAssembly.id;
+                    currentSensorIndex = 1;
+                    addLogEntry(`Started new assembly: ${newAssembly.serial_number}`, 'info');
+                    return true;
+                } else {
+                    // Handle failure
+                    showNotification('Could not create a new assembly. Please go back and select a work order.', 'error');
+                    addLogEntry('Failed to create a new assembly', 'error');
+                    return false;
+                }
+            }
+            
+            // Rest of your loadAssemblyState function remains the same
+            // ...
+        }
+    </script>
+    <!-- Add at the beginning of the script section in filepath: /workspaces/codespaces-react/frontend/src/pages/YSB/5YB011057.html -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Notify parent window that we're loaded
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'YBS_ASSEMBLY_LOADED' }, '*');
+            }
+            
+            // Extract assembly ID from URL and store in localStorage for persistence
+            const urlParams = new URLSearchParams(window.location.search);
+            const assemblyId = urlParams.get('id');
+            if (assemblyId) {
+                localStorage.setItem('currentYBSAssemblyId', assemblyId);
+                console.log('Stored assembly ID in localStorage:', assemblyId);
+            }
+        });
+    </script>
+    <!-- Replace the loadAssemblyState function with this improved version -->
+    <script>
+        // Add this at the top of your script section
+        let creationAttempted = false; // Flag to prevent multiple creation attempts
+
+        // Enhanced loadAssemblyState function to prevent loops
+        async function loadAssemblyState() {
+            // First check if there's an assembly ID in the URL
+            const id = getAssemblyId();
+            const workOrderId = getWorkOrderId();
+            
+            if (!id) {
+                // No assembly ID in URL
+                if (workOrderId && !creationAttempted) {
+                    // We have a work order ID and haven't attempted creation yet
+                    creationAttempted = true; // Set flag to prevent future attempts
+                    addLogEntry(`Creating new assembly for work order #${workOrderId}`, 'info');
+                    const newAssembly = await createAssemblyProcess(workOrderId);
+                    if (newAssembly) {
+                        assemblyId = newAssembly.id;
+                        currentSensorIndex = 1;
+                        return true;
+                    } else {
+                        // Failed to create assembly
+                        addLogEntry('Failed to create assembly', 'error');
+                        showNotification('Failed to create assembly. Please return to work orders page.', 'error');
+                        
+                        // Show a simple interface to get back
+                        document.getElementById('mainContainer').innerHTML = `
+                            <div style="text-align: center; padding: 2rem;">
+                                <h2 style="color: #dc2626; margin-bottom: 1rem;">Assembly Creation Failed</h2>
+                                <p>Unable to create assembly. The work order may not exist or there might be a server issue.</p>
+                                <button onclick="window.location.href='/assembly'" 
+                                        style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                               border: none; border-radius: 0.375rem; margin-top: 1rem; 
+                                               cursor: pointer;">
+                                    Return to Assembly Page
+                                </button>
+                            </div>
+                        `;
+                        return false;
+                    }
+                } else if (!creationAttempted) {
+                    // No assembly ID and no work order ID
+                    creationAttempted = true; // Set flag to prevent future attempts
+                    
+                    // Try to get available work orders
+                    try {
+                        const workOrdersResponse = await fetch('/api/work-order/');
+                        if (!workOrdersResponse.ok) {
+                            throw new Error('Failed to fetch work orders');
+                        }
+                        
+                        const workOrders = await workOrdersResponse.json();
+                        
+                        // Filter for YBS/RAP work orders
+                        const ybsWorkOrders = Array.isArray(workOrders) 
+                            ? workOrders.filter(order => 
+                                (order.product && (order.product.includes('YBS') || order.product.includes('RAP'))) || 
+                                (order.item_code && order.item_code.includes('5YB'))
+                              )
+                            : [];
+                        
+                        if (ybsWorkOrders.length > 0) {
+                            // Use the first YBS work order
+                            const workOrderToUse = ybsWorkOrders[0].id;
+                            addLogEntry(`Using existing work order #${workOrderToUse}`, 'info');
+                            const newAssembly = await createAssemblyProcess(workOrderToUse);
+                            if (newAssembly) {
+                                assemblyId = newAssembly.id;
+                                currentSensorIndex = 1;
+                                return true;
+                            }
+                        } else {
+                            showNotification('No valid YBS work orders found', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error fetching work orders:', error);
+                    }
+                    
+                    // Show a simple interface to get back since we couldn't create an assembly
+                    document.getElementById('mainContainer').innerHTML = `
+                        <div style="text-align: center; padding: 2rem;">
+                            <h2 style="color: #dc2626; margin-bottom: 1rem;">No Assembly ID Found</h2>
+                            <p>Please select a work order from the Assembly page first.</p>
+                            <button onclick="window.location.href='/assembly'" 
+                                    style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                           border: none; border-radius: 0.375rem; margin-top: 1rem; 
+                                           cursor: pointer;">
+                                Return to Assembly Page
+                            </button>
+                        </div>
+                    `;
+                    return false;
+                } else {
+                    // Already attempted creation and failed - don't try again
+                    return false;
+                }
+            }
+            
+            // We have an assembly ID, load its state
+            assemblyId = id;
+            
+            try {
+                const response = await fetch(`/api/assembly-process/${id}/`);
+                if (!response.ok) {
+                    throw new Error('Failed to load assembly state');
+                }
+                
+                const data = await response.json();
+                console.log('Loaded assembly data:', data);
+                
+                // Set the current sensor index
+                currentSensorIndex = data.current_sensor_index || 1;
+                
+                // Load scanned sensors
+                if (data.scanned_parts && data.scanned_parts.length > 0) {
+                    scannedSensors = data.scanned_parts.map(part => ({
+                        sensorId: part.sensor_id,
+                        barcode: part.part_code,
+                        timestamp: new Date(part.scan_time),
+                        status: 'success'
+                    }));
+                    
+                    // Update UI to reflect scanned parts
+                    scannedSensors.forEach(sensor => {
+                        if (sensorCells[sensor.sensorId]) {
+                            sensorCells[sensor.sensorId].classList.add('success');
+                        }
+                    });
+                    
+                    // Mark the next sensor
+                    if (currentSensorIndex <= 24) {
+                        // Clear any existing 'next' markers
+                        document.querySelectorAll('.next').forEach(cell => {
+                            cell.classList.remove('next');
+                        });
+                        
+                        // Mark the current sensor as next
+                        if (sensorCells[currentSensorIndex]) {
+                            sensorCells[currentSensorIndex].classList.add('next');
+                        }
+                    } else {
+                        // All sensors scanned
+                        completeButton.classList.remove('hidden');
+                        completeButton.disabled = false;
+                    }
+                    
+                    // Add log entries for loaded parts
+                    addLogEntry('Previous assembly state loaded', 'info');
+                    addLogEntry(`Continuing from Sensor #${currentSensorIndex}`, 'info');
+                    
+                    // Update progress
+                    updateProgress();
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading assembly state:', error);
+                addLogEntry('Failed to load previous assembly state', 'error');
+                
+                // Show error but don't try to create a new assembly automatically
+                showNotification('Error loading assembly. Please return to work orders page.', 'error');
+                return false;
+            }
+        }
+    </script>
+    <!-- Replace the createAssemblyProcess function with this improved version -->
+    <script>
+        // Improved createAssemblyProcess to handle errors better
+        async function createAssemblyProcess(workOrderId) {
+            if (!workOrderId) {
+                console.error('No work order ID provided');
+                showNotification('Error: No work order ID provided', 'error');
+                return null;
+            }
+            
+            try {
+                // Show processing notification
+                showNotification('Creating new assembly process...', 'info');
+                
+                // First check if the work order exists
+                const workOrderResponse = await fetch(`/api/work-order/${workOrderId}/`);
+                if (!workOrderResponse.ok) {
+                    throw new Error(`Work order with ID ${workOrderId} not found`);
+                }
+                
+                const response = await fetch(`/api/assembly-process/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        work_order: workOrderId,
+                        created_by: 'Current User',
+                        status: 'pending'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Failed to create assembly process: ${JSON.stringify(errorData)}`);
+                }
+                
+                const data = await response.json();
+                assemblyId = data.id;
+                
+                // Update URL with assembly ID without reloading page
+                const url = new URL(window.location);
+                url.searchParams.set('id', assemblyId);
+                window.history.pushState({}, '', url);
+                
+                // Store in localStorage for persistence
+                localStorage.setItem('currentYBSAssemblyId', assemblyId);
+                
+                showNotification(`New assembly process created: ${data.serial_number}`, 'success');
+                addLogEntry(`Started new assembly with Serial #${data.serial_number}`, 'info');
+                
+                return data;
+            } catch (error) {
+                console.error('Error creating assembly process:', error);
+                showNotification(`Failed to create assembly process: ${error.message}`, 'error');
+                addLogEntry(`Error: ${error.message}`, 'error');
+                return null;
+            }
+        }
+    </script>
+    <!-- Fix for the complete assembly function and restart button -->
+    <script>
+        // Replace the complete button event listener with this improved version
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get elements once
+            const completeButton = document.getElementById('completeButton');
+            const restartButton = document.getElementById('restartButton');
+            
+            if (completeButton) {
+                // Remove any existing event listeners by cloning and replacing
+                const newCompleteButton = completeButton.cloneNode(true);
+                completeButton.parentNode.replaceChild(newCompleteButton, completeButton);
+                
+                // Add new event listener
+                newCompleteButton.addEventListener('click', async function() {
+                    this.disabled = true;
+                    await completeAssembly();
+                });
+            }
+            
+            if (restartButton) {
+                // Remove any existing event listeners by cloning and replacing
+                const newRestartButton = restartButton.cloneNode(true);
+                restartButton.parentNode.replaceChild(newRestartButton, restartButton);
+                
+                // Add new event listener
+                newRestartButton.addEventListener('click', async function() {
+                    const confirmed = confirm("Are you sure you want to restart this assembly? All current progress will be lost.");
+                    if (confirmed) {
+                        await restartAssembly();
+                    }
+                });
+            }
+        });
+
+        // Improved complete assembly function with error handling
+        async function completeAssembly() {
+            const id = getAssemblyId();
+            
+            if (!id) {
+                showNotification('Error: No assembly ID found', 'error');
+                document.getElementById('completeButton').disabled = false;
+                return;
+            }
+            
+            try {
+                // Show processing message
+                showNotification('Processing...', 'info');
+                addLogEntry('Completing assembly process...', 'info');
+                
+                // Prepare data for submission
+                const assemblyData = {
+                    operator: 'Current User',
+                    notes: 'Assembly completed via YBS assembly interface',
+                    metadata: {
+                        scanned_sensors: scannedSensors.map(sensor => ({
+                            id: sensor.sensorId,
+                            barcode: sensor.barcode,
+                            scan_time: sensor.timestamp.toISOString()
+                        }))
+                    }
+                };
+                
+                // Make the API call with proper error handling
+                const response = await fetch(`/api/assembly-process/${id}/update-metadata/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        metadata: assemblyData.metadata
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to save metadata: ${errorText}`);
+                }
+                
+                // Now update the status to 'completed'
+                const completeResponse = await fetch(`/api/assembly-process/${id}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        status: 'completed',
+                        completed_at: new Date().toISOString(),
+                        notes: assemblyData.notes
+                    })
+                });
+                
+                if (!completeResponse.ok) {
+                    const errorText = await completeResponse.text();
+                    throw new Error(`Failed to complete assembly: ${errorText}`);
+                }
+                
+                const data = await completeResponse.json();
+                
+                // Success - show notification
+                showNotification('Assembly completed successfully! Data has been saved.', 'success');
+                addLogEntry('Assembly completed and verified. Data saved to database.', 'success');
+                
+                // Update button text
+                setTimeout(() => {
+                    document.getElementById('completeButton').textContent = 'Assembly Completed ✓';
+                    
+                    // Clear localStorage on completion
+                    localStorage.removeItem('currentYBSAssemblyId');
+                    localStorage.removeItem('currentSensorIndex');
+                    localStorage.removeItem('scannedSensors');
+                    
+                    // Offer to start a new assembly after a delay
+                    setTimeout(() => {
+                        if (confirm('Assembly completed successfully! Would you like to start a new assembly?')) {
+                            window.location.href = '/assembly/ysb';
+                        }
+                    }, 2000);
+                }, 1000);
+                
+                return true;
+            } catch (error) {
+                console.error('Error completing assembly:', error);
+                showNotification(`Failed to complete assembly: ${error.message}`, 'error');
+                addLogEntry(`Error: ${error.message}`, 'error');
+                document.getElementById('completeButton').disabled = false;
+                return false;
+            }
+        }
+        
+        // New restart assembly function
+        async function restartAssembly() {
+            try {
+                // Clear local storage data
+                localStorage.removeItem('currentSensorIndex');
+                localStorage.removeItem('scannedSensors');
+                
+                // Keep the assembly ID but reset the state
+                const id = getAssemblyId();
+                if (id) {
+                    // Reset the assembly state on the server
+                    const response = await fetch(`/api/assembly-process/${id}/`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            status: 'in_progress',
+                            current_sensor_index: 1,
+                            metadata: {
+                                current_sequence_index: 0,
+                                scanned_sensors: [],
+                                scanned_components: []
+                            }
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to reset assembly: ${errorText}`);
+                    }
+                }
+                
+                // Reload the page to start fresh
+                showNotification('Assembly has been reset. Starting fresh...', 'info');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Error restarting assembly:', error);
+                showNotification(`Failed to restart assembly: ${error.message}`, 'error');
+            }
+        }
+    </script>
+
+    <!-- Fix for saving sensor logs to the database -->
+    <script>
+        // Improved saveCurrentScan function with fallback mechanisms
+        async function saveCurrentScan(sensor) {
+            const id = getAssemblyId();
+            
+            if (!id) {
+                showNotification('Error: No assembly ID found', 'error');
+                return false;
+            }
+            
+            try {
+                // First try the dedicated add-scanned-part endpoint
+                try {
+                    const response = await fetch(`/api/assembly-process/${id}/add-scanned-part/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            part_code: sensor.barcode,
+                            sensor_id: sensor.sensorId,
+                            operator: 'Current User'
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('Scan saved successfully:', data);
+                        
+                        // Also save to localStorage as a backup
+                        saveToLocalStorage();
+                        
+                        return data;
+                    } else {
+                        console.warn('Primary API endpoint failed, trying fallback...');
+                        // Fall through to the fallback method
+                    }
+                } catch (error) {
+                    console.warn('Primary API endpoint error:', error);
+                    // Fall through to the fallback method
+                }
+                
+                // Fallback: Save to metadata if the add-scanned-part endpoint failed
+                console.log('Using metadata fallback for saving scan');
+                
+                // Get current assembly to access its metadata
+                const getResponse = await fetch(`/api/assembly-process/${id}/`);
+                if (!getResponse.ok) {
+                    throw new Error('Failed to retrieve assembly data for metadata update');
+                }
+                
+                const assembly = await getResponse.json();
+                
+                // Prepare metadata with the new scan
+                const metadata = assembly.metadata || {};
+                if (!metadata.scanned_sensors) {
+                    metadata.scanned_sensors = [];
+                }
+                
+                // Add the new scan
+                metadata.scanned_sensors.push({
+                    id: sensor.sensorId,
+                    barcode: sensor.barcode,
+                    scan_time: new Date().toISOString()
+                });
+                
+                // Update metadata on server
+                const metadataResponse = await fetch(`/api/assembly-process/${id}/update-metadata/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ metadata: metadata })
+                });
+                
+                if (!metadataResponse.ok) {
+                    throw new Error('Failed to update assembly metadata');
+                }
+                
+                // Save to localStorage as a backup
+                saveToLocalStorage();
+                
+                return await metadataResponse.json();
+            } catch (error) {
+                console.error('Error saving scan:', error);
+                showNotification('Warning: Could not save scan to server, using local storage as backup', 'warning');
+                
+                // Even if server save fails, still save to localStorage
+                saveToLocalStorage();
+                
+                return false;
+            }
+            
+            // Helper function to save data to localStorage
+            function saveToLocalStorage() {
+                // Save the current sensor index
+                localStorage.setItem('currentSensorIndex', currentSensorIndex.toString());
+                
+                // Save the scanned sensors array
+                try {
+                    const serializedSensors = JSON.stringify(scannedSensors);
+                    localStorage.setItem('scannedSensors', serializedSensors);
+                } catch (e) {
+                    console.error('Error saving to localStorage:', e);
+                }
+            }
+        }
+        
+        // Improved updateCurrentSensorIndex function with fallback
+        async function updateCurrentSensorIndex() {
+            const id = getAssemblyId();
+            
+            if (!id) {
+                showNotification('Error: No assembly ID found', 'error');
+                return false;
+            }
+            
+            // Always save to localStorage first as a guaranteed backup
+            localStorage.setItem('currentSensorIndex', currentSensorIndex.toString());
+            
+            try {
+                // First try the dedicated endpoint
+                try {
+                    const response = await fetch(`/api/assembly-process/${id}/update-sensor-index/`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            current_sensor_index: currentSensorIndex
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        return await response.json();
+                    } else {
+                        console.warn('Primary API endpoint failed, trying fallback...');
+                        // Fall through to fallback method
+                    }
+                } catch (error) {
+                    console.warn('Primary API endpoint error:', error);
+                    // Fall through to fallback method
+                }
+                
+                // Fallback: Update via the main PATCH endpoint
+                console.log('Using direct PATCH fallback for updating sensor index');
+                
+                const patchResponse = await fetch(`/api/assembly-process/${id}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        current_sensor_index: currentSensorIndex
+                    })
+                });
+                
+                if (!patchResponse.ok) {
+                    throw new Error('Failed to update sensor index via PATCH');
+                }
+                
+                return await patchResponse.json();
+            } catch (error) {
+                console.error('Error updating sensor index:', error);
+                
+                // Already saved to localStorage, so this is just a warning
+                console.warn('Using local storage backup for sensor index');
+                
+                return false;
+            }
+        }
+    </script>
+
+    <!-- Fix for loading previous state -->
+    <script>
+        // Enhanced loadAssemblyState to properly load from localStorage if server fails
+        async function loadAssemblyState() {
+            // First check if there's an assembly ID
+            const id = getAssemblyId();
+            const workOrderId = getWorkOrderId();
+            
+            if (!id) {
+                // No assembly ID - handle creation or error as in your original code
+                // ... existing code for no ID ...
+                return false;
+            }
+            
+            try {
+                // Set the assembly ID
+                assemblyId = id;
+                
+                // Try to load from server first
+                const response = await fetch(`/api/assembly-process/${id}/`);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load assembly state: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Loaded assembly data from server:', data);
+                
+                // Set the sequence index, trying several possible sources in order of preference
+                if (data.metadata && data.metadata.current_sequence_index !== undefined) {
+                    // From metadata field (best source)
+                    currentSensorIndex = data.metadata.current_sequence_index;
+                    console.log('Set current index from metadata:', currentSensorIndex);
+                } else if (data.current_sensor_index) {
+                    // From current_sensor_index field (legacy)
+                    currentSensorIndex = data.current_sensor_index;
+                    console.log('Set current index from current_sensor_index:', currentSensorIndex);
+                } else {
+                    // Default to localStorage or 1
+                    const storedIndex = localStorage.getItem('currentSensorIndex');
+                    currentSensorIndex = storedIndex ? parseInt(storedIndex) : 1;
+                    console.log('Set current index from localStorage:', currentSensorIndex);
+                }
+                
+                // Load scanned parts from several possible sources
+                
+                // 1. First try metadata.scanned_sensors (best source)
+                if (data.metadata && data.metadata.scanned_sensors && Array.isArray(data.metadata.scanned_sensors)) {
+                    scannedSensors = data.metadata.scanned_sensors.map(s => ({
+                        sensorId: s.id,
+                        barcode: s.barcode,
+                        timestamp: new Date(s.scan_time),
+                        status: 'success'
+                    }));
+                    console.log('Loaded scanned sensors from metadata:', scannedSensors.length);
+                } 
+                // 2. Then try scanned_parts array (API field)
+                else if (data.scanned_parts && data.scanned_parts.length > 0) {
+                    scannedSensors = data.scanned_parts.map(part => ({
+                        sensorId: part.sensor_id,
+                        barcode: part.part_code,
+                        timestamp: new Date(part.scan_time),
+                        status: 'success'
+                    }));
+                    console.log('Loaded scanned sensors from scanned_parts:', scannedSensors.length);
+                } 
+                // 3. Finally try localStorage
+                else {
+                    try {
+                        const storedSensors = localStorage.getItem('scannedSensors');
+                        if (storedSensors) {
+                            scannedSensors = JSON.parse(storedSensors);
+                            console.log('Loaded scanned sensors from localStorage:', scannedSensors.length);
+                        } else {
+                            scannedSensors = [];
+                        }
+                    } catch (e) {
+                        console.error('Error parsing localStorage sensors:', e);
+                        scannedSensors = [];
+                    }
+                }
+                
+                // Now update the UI to reflect loaded state
+                
+                // First reset all UI elements
+                document.querySelectorAll('.sensor-cell').forEach(cell => {
+                    cell.classList.remove('success', 'next', 'error');
+                });
+                
+                // Mark scanned sensors in the UI
+                scannedSensors.forEach(sensor => {
+                    if (typeof sensor.sensorId === 'number' && sensorCells[sensor.sensorId]) {
+                        sensorCells[sensor.sensorId].classList.add('success');
+                    } else if (typeof sensor.sensorId === 'string' && sensor.sensorId.startsWith('component_')) {
+                        // This is a component scan
+                        const componentIndex = parseInt(sensor.sensorId.split('_')[1]);
+                        const component = Object.values(components).find(c => c.index === componentIndex);
+                        if (component) {
+                            component.scanned = true;
+                            component.element.style.backgroundColor = 'var(--status-success)';
+                        }
+                    }
+                });
+                
+                // Highlight the next item to scan
+                await highlightNextItem();
+                
+                // Update progress
+                updateProgress();
+                
+                addLogEntry('Assembly state loaded successfully', 'success');
+                return true;
+                
+            } catch (error) {
+                console.error('Error loading from server:', error);
+                
+                // Try to recover from localStorage
+                addLogEntry('Failed to load from server, trying local backup...', 'warning');
+                
+                try {
+                    // Get current sensor index from localStorage
+                    const storedIndex = localStorage.getItem('currentSensorIndex');
+                    if (storedIndex) {
+                        currentSensorIndex = parseInt(storedIndex);
+                        
+                        // Get scanned sensors from localStorage
+                        const storedSensors = localStorage.getItem('scannedSensors');
+                        if (storedSensors) {
+                            scannedSensors = JSON.parse(storedSensors);
+                            
+                            // Update UI with localStorage data
+                            scannedSensors.forEach(sensor => {
+                                if (typeof sensor.sensorId === 'number' && sensorCells[sensor.sensorId]) {
+                                    sensorCells[sensor.sensorId].classList.add('success');
+                                } else if (typeof sensor.sensorId === 'string' && sensor.sensorId.startsWith('component_')) {
+                                    // This is a component scan
+                                    const componentIndex = parseInt(sensor.sensorId.split('_')[1]);
+                                    const component = Object.values(components).find(c => c.index === componentIndex);
+                                    if (component) {
+                                        component.scanned = true;
+                                        component.element.style.backgroundColor = 'var(--status-success)';
+                                    }
+                                }
+                            });
+                            
+                            // Highlight next item
+                            await highlightNextItem();
+                            
+                            // Update progress
+                            updateProgress();
+                            
+                            addLogEntry('Recovered state from local backup', 'info');
+                            showNotification('Recovered assembly state from local backup', 'info');
+                            return true;
+                        }
+                    }
+                    
+                    // If we get here, recovery failed
+                    addLogEntry('Could not recover state from local backup', 'error');
+                    return false;
+                    
+                } catch (recoveryError) {
+                    console.error('Error recovering from localStorage:', recoveryError);
+                    addLogEntry('Failed to recover state from local backup', 'error');
+                    return false;
+                }
+            }
+        }
+        
+        // Function to highlight the next item to scan based on current state
+        async function highlightNextItem() {
+            // Clear any existing highlights
+            document.querySelectorAll('.next').forEach(el => el.classList.remove('next'));
+            
+            if (currentSensorIndex <= 6) {
+                // We're in the component scanning phase
+                const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                const nextComponent = componentsArray.find(comp => !comp.scanned);
+                
+                if (nextComponent) {
+                    // Highlight the next component
+                    if (nextComponent.element) {
+                        nextComponent.element.classList.add('next');
+                    }
+                    
+                    addLogEntry(`Next scan: ${nextComponent.name} (${nextComponent.barcode})`, 'info');
+                    showNotification(`Please scan ${nextComponent.name}`, 'info');
+                } else {
+                    // All components scanned, move to sensors
+                    currentSensorIndex = 7;
+                    
+                    // Mark the first sensor as next
+                    if (sensorCells[1]) {
+                        sensorCells[1].classList.add('next');
+                        sensorCells[1].setAttribute('data-tooltip', `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`);
+                    }
+                    
+                    addLogEntry('All components scanned. Please start scanning sensors.', 'info');
+                    showNotification('All components scanned. Please start scanning sensors.', 'info');
+                }
+            } else if (currentSensorIndex <= 30) {
+                // We're in the sensor scanning phase
+                const sensorId = currentSensorIndex - 6;
+                
+                if (sensorId <= 24) {
+                    // Highlight the next sensor
+                    if (sensorCells[sensorId]) {
+                        sensorCells[sensorId].classList.add('next');
+                        sensorCells[sensorId].setAttribute('data-tooltip', `Sensor #${sensorId} - Next to scan: ${sensorBarcodes[sensorId]}`);
+                    }
+                    
+                    addLogEntry(`Next scan: Sensor #${sensorId} (${sensorBarcodes[sensorId]})`, 'info');
+                    showNotification(`Please scan Sensor #${sensorId}`, 'info');
+                } else {
+                    // All sensors scanned
+                    completeButton.classList.remove('hidden');
+                    completeButton.disabled = false;
+                    
+                    addLogEntry('All sensors scanned. Please complete the assembly.', 'success');
+                    showNotification('All sensors scanned! Click Complete to finish assembly.', 'success');
+                }
+            } else {
+                // All items scanned
+                completeButton.classList.remove('hidden');
+                completeButton.disabled = false;
+                
+                addLogEntry('All items scanned. Please complete the assembly.', 'success');
+                showNotification('All items scanned! Click Complete to finish assembly.', 'success');
+            }
+            
+            // Save current index to localStorage
+            localStorage.setItem('currentSensorIndex', currentSensorIndex.toString());
+            
+            // Also update on server if possible
+            try {
+                await updateCurrentSensorIndex();
+            } catch (error) {
+                console.warn('Failed to update server with current index, using localStorage backup');
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <div class="header">
+            <div class="part-id">5YB011057</div>
+            <h1 class="title">YBS Machine - Duct Number 41 - 24 Duct Assembly</h1>
+        </div>
+
+        <div class="board-to-board-title">Board to Board</div>
+
+        <div class="circuit-lines"></div>
+        <div class="glow"></div>
+
+        <table class="circuit-table" id="circuitTable">
+            <tr>
+                <td class="component-name">Magnetic<br>Coil Sensor</td>
+                <td class="sensor-cell cell next" data-sensor-id="1" data-tooltip="Sensor #1 - Next to scan">1</td>
+                <td class="sensor-cell cell" data-sensor-id="2" data-tooltip="Sensor #2">2</td>
+                <td class="sensor-cell cell" data-sensor-id="3" data-tooltip="Sensor #3">3</td>
+                <td class="sensor-cell cell" data-sensor-id="4" data-tooltip="Sensor #4">4</td>
+                <td class="sensor-cell cell" data-sensor-id="5" data-tooltip="Sensor #5">5</td>
+                <td class="sensor-cell cell" data-sensor-id="6" data-tooltip="Sensor #6">6</td>
+                <td class="sensor-cell cell" data-sensor-id="7" data-tooltip="Sensor #7">7</td>
+                <td class="sensor-cell cell" data-sensor-id="8" data-tooltip="Sensor #8">8</td>
+                <td class="sensor-cell cell" data-sensor-id="9" data-tooltip="Sensor #9">9</td>
+                <td class="sensor-cell cell" data-sensor-id="10" data-tooltip="Sensor #10">10</td>
+                <td class="sensor-cell cell" data-sensor-id="11" data-tooltip="Sensor #11">11</td>
+                <td class="sensor-cell cell" data-sensor-id="12" data-tooltip="Sensor #12">12</td>
+                <td class="sensor-cell cell" data-sensor-id="13" data-tooltip="Sensor #13">13</td>
+                <td class="sensor-cell cell" data-sensor-id="14" data-tooltip="Sensor #14">14</td>
+                <td class="sensor-cell cell" data-sensor-id="15" data-tooltip="Sensor #15">15</td>
+                <td class="sensor-cell cell" data-sensor-id="16" data-tooltip="Sensor #16">16</td>
+                <td class="sensor-cell cell" data-sensor-id="17" data-tooltip="Sensor #17">17</td>
+                <td class="sensor-cell cell" data-sensor-id="18" data-tooltip="Sensor #18">18</td>
+                <td class="sensor-cell cell" data-sensor-id="19" data-tooltip="Sensor #19">19</td>
+                <td class="sensor-cell cell" data-sensor-id="20" data-tooltip="Sensor #20">20</td>
+                <td class="sensor-cell cell" data-sensor-id="21" data-tooltip="Sensor #21">21</td>
+                <td class="sensor-cell cell" data-sensor-id="22" data-tooltip="Sensor #22">22</td>
+                <td class="sensor-cell cell" data-sensor-id="23" data-tooltip="Sensor #23">23</td>
+                <td class="sensor-cell cell" data-sensor-id="24" data-tooltip="Sensor #24">24</td>
+            </tr>
+            <tr>
+                <td class="component-name">PCB BOARD</td>
+                <td class="left-pcb cell" colspan="8" data-tooltip="Left Slave PCB - Controls sensors 1-8">Assembled YBS ILI Slave Left PCB - BL Ver - T - REV 1</td>
+                <td class="master-pcb cell" colspan="8" data-tooltip="Master PCB - Controls all 24 spindles">Assembled YBS ILI Master PCB - 24 Spindles -BL-T Ver-REV 1</td>
+                <td class="right-pcb cell" colspan="8" data-tooltip="Right Slave PCB - Controls sensors 17-24">Assembled YBS ILI Slave Right PCB - BL Ver - T - REV 1</td>
+            </tr>
+            <tr>
+                <td class="component-name">Joining Cable</td>
+                <td class="empty-cell" colspan="7"></td>
+                <td class="board-to-board cell" colspan="2" data-tooltip="Connection between Left PCB and Master PCB">Board to<br>Board</td>
+                <td class="empty-cell" colspan="7"></td>
+                <td class="board-to-board cell" colspan="2" data-tooltip="Connection between Master PCB and Right PCB">Board to<br>Board</td>
+                <td class="empty-cell" colspan="6"></td>
+            </tr>
+            <tr>
+                <td class="component-name">P&C Cable</td>
+                <td class="power-cable cell" colspan="24" data-tooltip="Power & Communication Cable - 1680mm length">YBS POWER & COMMUNICATION CABLE ASSY -1680mm - RR</td>
+            </tr>
+        </table>
+
+        <div id="tooltip" class="tooltip"></div>
+        <div id="connectionLine1" class="connection-line"></div>
+        <div id="connectionLine2" class="connection-line"></div>
+
+        <div class="scan-section">
+            <h2 class="text-xl font-semibold mb-4">Sensor Barcode Verification</h2>
+            
+            <div id="errorMessage" class="notification-error"></div>
+            
+            <div class="scan-input-container">
+                <input type="text" id="barcodeInput" class="scan-input" placeholder="Scan sensor barcode..." autofocus>
+                <button id="scanButton" class="scan-button">Verify</button>
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-header">
+                    <div class="progress-label">Assembly Progress</div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="logs-container">
+                <div class="log-header">Assembly Logs</div>
+                <div id="logsContent"></div>
+            </div>
+            
+            <div class="scan-controls">
+                <button id="completeButton" class="complete-button hidden" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    Complete Assembly
+                </button>
+                
+                <button id="restartButton" class="restart-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 4v6h6"></path>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    </svg>
+                    Restart Assembly
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing sensor barcode mapping code
+            const sensorBarcodes = {
+                1: "R22J200177",
+                2: "R22J102367",
+                3: "R22J102368",
+                4: "R22J102440",
+                5: "R22J102371",
+                6: "R22J102389",
+                7: "R22J102390",
+                8: "R22J102391",
+                9: "R22J102392",
+                10: "R22J102393",
+                11: "R22J102394",
+                12: "R22J102395",
+                13: "R22J102396",
+                14: "R22J102397",
+                15: "R22J102398",
+                16: "R22J102399",
+                17: "R22J102400",
+                18: "R22J102401",
+                19: "R22J102402",
+                20: "R22J102403",
+                21: "R22J102404",
+                22: "R22J102405",
+                23: "R22J102406",
+                24: "R22J102407"
+            };
+
+            // Initialize variables
+            let currentSensorIndex = 1;
+            let scannedSensors = [];
+            let assemblyId = null; // Store the assembly ID
+
+            // Get elements
+            const barcodeInput = document.getElementById('barcodeInput');
+            const scanButton = document.getElementById('scanButton');
+            const completeButton = document.getElementById('completeButton');
+            const progressFill = document.getElementById('progressFill');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const logsContent = document.getElementById('logsContent');
+            const sensorCells = {};
+            
+            // Initialize sensor cells
+            document.querySelectorAll('.sensor-cell').forEach(cell => {
+                const sensorId = parseInt(cell.getAttribute('data-sensor-id'));
+                sensorCells[sensorId] = cell;
+                
+                // Set initial tooltip
+                cell.setAttribute('data-tooltip', `Sensor #${sensorId}: ${sensorBarcodes[sensorId]}`);
+            });
+            
+            // Mark the first sensor as next by default
+            sensorCells[1].classList.add('next');
+            
+            // Get assembly ID from URL parameters
+            function getAssemblyId() {
+                // First try from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const id = urlParams.get('id');
+                
+                if (id) {
+                    // If found in URL, also save to localStorage for persistence
+                    localStorage.setItem('currentYBSAssemblyId', id);
+                    return id;
+                }
+                
+                // Fallback to localStorage if not in URL
+                return localStorage.getItem('currentYBSAssemblyId');
+            }
+
+            // Get work order ID from URL parameters
+            function getWorkOrderId() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('order');
+            }
+
+            // Create a new assembly process if none exists
+            async function createAssemblyProcess(workOrderId) {
+                if (!workOrderId) {
+                    console.error('No work order ID provided');
+                    showNotification('Error: No work order ID provided', 'error');
+                    return null;
+                }
+                
+                try {
+                    // Show processing notification
+                    showNotification('Creating new assembly process...', 'info');
+                    
+                    const response = await fetch(`/api/assembly-process/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            work_order: workOrderId,
+                            created_by: 'Current User',
+                            status: 'pending'
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to create assembly process: ${errorText}`);
+                    }
+                    
+                    const data = await response.json();
+                    assemblyId = data.id;
+                    
+                    // Update URL with assembly ID without reloading page
+                    const url = new URL(window.location);
+                    url.searchParams.set('id', assemblyId);
+                    window.history.pushState({}, '', url);
+                    
+                    showNotification(`New assembly process created: ${data.serial_number}`, 'success');
+                    addLogEntry(`Started new assembly with Serial #${data.serial_number}`, 'info');
+                    
+                    return data;
+                } catch (error) {
+                    console.error('Error creating assembly process:', error);
+                    showNotification('Failed to create assembly process. Please try again.', 'error');
+                    addLogEntry('Error: Failed to create assembly process', 'error');
+                    return null;
+                }
+            }
+
+            // Load the assembly state from the server
+            async function loadAssemblyState() {
+                // First check if there's an assembly ID in the URL
+                const id = getAssemblyId();
+                const workOrderId = getWorkOrderId();
+                
+                if (!id) {
+                    // No assembly ID in URL
+                    if (workOrderId) {
+                        // We have a work order ID, create a new assembly
+                        addLogEntry(`Creating new assembly for work order #${workOrderId}`, 'info');
+                        const newAssembly = await createAssemblyProcess(workOrderId);
+                        if (newAssembly) {
+                            assemblyId = newAssembly.id;
+                            currentSensorIndex = 1;
+                            return true;
+                        } else {
+                            // Failed to create assembly
+                            addLogEntry('Failed to create assembly', 'error');
+                            showNotification('Failed to create assembly. Redirecting...', 'error');
+                            
+                            // Redirect to main assembly page after 2 seconds
+                            setTimeout(() => {
+                                window.location.href = '/assembly';
+                            }, 2000);
+                            
+                            return false;
+                        }
+                    } else {
+                        // No assembly ID and no work order ID
+                        showNotification('Error: No assembly or work order ID provided', 'error');
+                        addLogEntry('No assembly ID or work order ID provided', 'error');
+                        
+                        // Show a modal asking user for work order ID
+                        const workOrderIdInput = prompt('Please enter a work order ID to continue:');
+                        if (workOrderIdInput && !isNaN(parseInt(workOrderIdInput))) {
+                            // Create a new assembly with the provided work order ID
+                            const newAssembly = await createAssemblyProcess(parseInt(workOrderIdInput));
+                            if (newAssembly) {
+                                assemblyId = newAssembly.id;
+                                currentSensorIndex = 1;
+                                return true;
+                            }
+                        }
+                        
+                        // Redirect to assembly page after 2 seconds
+                        setTimeout(() => {
+                            window.location.href = '/assembly';
+                        }, 2000);
+                        
+                        return false;
+                    }
+                }
+                
+                // We have an assembly ID, load its state
+                assemblyId = id;
+                
+                try {
+                    const response = await fetch(`/api/assembly-process/${id}/`);
+                    if (!response.ok) {
+                        throw new Error('Failed to load assembly state');
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Loaded assembly data:', data);
+                    
+                    // Set the current sensor index
+                    currentSensorIndex = data.current_sensor_index || 1;
+                    
+                    // Load scanned sensors
+                    if (data.scanned_parts && data.scanned_parts.length > 0) {
+                        scannedSensors = data.scanned_parts.map(part => ({
+                            sensorId: part.sensor_id,
+                            barcode: part.part_code,
+                            timestamp: new Date(part.scan_time),
+                            status: 'success'
+                        }));
+                        
+                        // Update UI to reflect scanned parts
+                        scannedSensors.forEach(sensor => {
+                            if (sensorCells[sensor.sensorId]) {
+                                sensorCells[sensor.sensorId].classList.add('success');
+                            }
+                        });
+                        
+                        // Mark the next sensor
+                        if (currentSensorIndex <= 24) {
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            
+                            // Mark the current sensor as next
+                            if (sensorCells[currentSensorIndex]) {
+                                sensorCells[currentSensorIndex].classList.add('next');
+                            }
+                        } else {
+                            // All sensors scanned
+                            completeButton.classList.remove('hidden');
+                            completeButton.disabled = false;
+                        }
+                        
+                        // Add log entries for loaded parts
+                        addLogEntry('Previous assembly state loaded', 'info');
+                        addLogEntry(`Continuing from Sensor #${currentSensorIndex}`, 'info');
+                        
+                        // Update progress
+                        updateProgress();
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error loading assembly state:', error);
+                    addLogEntry('Failed to load previous assembly state', 'error');
+                    
+                    // If we have a work order ID, try creating a new assembly
+                    if (workOrderId) {
+                        addLogEntry('Attempting to create a new assembly', 'info');
+                        const newAssembly = await createAssemblyProcess(workOrderId);
+                        if (newAssembly) {
+                            assemblyId = newAssembly.id;
+                            currentSensorIndex = 1;
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                }
+            }
+
+            // Save a scanned part to the server
+            async function saveCurrentScan(sensor) {
+                const id = getAssemblyId();
+                
+                if (!id) {
+                    showNotification('Error: No assembly ID found', 'error');
+                    
+                    // Try to get work order ID
+                    const workOrderId = getWorkOrderId();
+                    if (!workOrderId) {
+                        // Prompt user for work order ID
+                        const inputWorkOrderId = prompt('Please enter a work order ID to continue:');
+                        if (inputWorkOrderId && !isNaN(parseInt(inputWorkOrderId))) {
+                            const newAssembly = await createAssemblyProcess(parseInt(inputWorkOrderId));
+                            if (newAssembly) {
+                                assemblyId = newAssembly.id;
+                                localStorage.setItem('currentYBSAssemblyId', assemblyId);
+                            } else {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        // Create assembly with the work order ID from URL
+                        const newAssembly = await createAssemblyProcess(workOrderId);
+                        if (newAssembly) {
+                            assemblyId = newAssembly.id;
+                            localStorage.setItem('currentYBSAssemblyId', assemblyId);
+                        } else {
+                            return false;
+                        }
+                    }
+                } else {
+                    assemblyId = id;
+                }
+                
+                try {
+                    const response = await fetch(`/api/assembly-process/${assemblyId}/add-scanned-part/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            part_code: sensor.barcode,
+                            sensor_id: sensor.sensorId,
+                            operator: 'Current User'
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to save scan: ${errorText}`);
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error saving scan:', error);
+                    showNotification('Warning: Failed to save scan to server', 'warning');
+                    return false;
+                }
+            }
+
+            // Update the current sensor index on the server
+            async function updateCurrentSensorIndex() {
+                if (!assemblyId) {
+                    showNotification('Error: No assembly ID found', 'error');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/assembly-process/${assemblyId}/update-sensor-index/`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            current_sensor_index: currentSensorIndex
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to update sensor index');
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error updating sensor index:', error);
+                    return false;
+                }
+            }
+            
+            // Function to verify barcode
+            async function verifyBarcode(barcode) {
+                // Extract the base part of the barcode (first 3 parts)
+                const baseBarcode = barcode.split('-').slice(0, 3).join('-');
+                
+                // Check if this is the expected sensor
+                const expectedBarcode = sensorBarcodes[currentSensorIndex];
+                
+                if (baseBarcode === expectedBarcode) {
+                    // Success - mark the sensor as scanned
+                    sensorCells[currentSensorIndex].classList.remove('next');
+                    sensorCells[currentSensorIndex].classList.add('success');
+                    
+                    // Add to scanned sensors list
+                    const newSensor = {
+                        sensorId: currentSensorIndex,
+                        barcode: barcode,
+                        timestamp: new Date(),
+                        status: 'success'
+                    };
+                    
+                    scannedSensors.push(newSensor);
+                    
+                    // Save this scan to the database
+                    await saveCurrentScan(newSensor);
+                    
+                    // Add log entry
+                    addLogEntry(`Sensor #${currentSensorIndex} verified successfully: ${barcode}`, 'success');
+                    
+                    // Show notification
+                    showNotification(`Sensor #${currentSensorIndex} verified successfully!`, 'success');
+                    
+                    // Move to next sensor
+                    currentSensorIndex++;
+                    
+                    // Update the current sensor index in the database
+                    await updateCurrentSensorIndex();
+                    
+                    // Update progress
+                    updateProgress();
+                    
+                    // Mark next sensor if available
+                    if (currentSensorIndex <= 24) {
+                        sensorCells[currentSensorIndex].classList.add('next');
+                        // Update tooltip to indicate next sensor
+                        sensorCells[currentSensorIndex].setAttribute(
+                            'data-tooltip', 
+                            `Sensor #${currentSensorIndex} - Next to scan`
+                        );
+                    } else {
+                        // All sensors scanned, show complete button
+                        completeButton.classList.remove('hidden');
+                        completeButton.disabled = false;
+                        showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
+                    }
+                    
+                    return true;
+                } else {
+                    // Error - wrong barcode
+                    addLogEntry(`Error: Expected ${expectedBarcode}, got ${barcode}`, 'error');
+                    showNotification(`Wrong sensor scanned! Expected sensor #${currentSensorIndex}`, 'error');
+                    
+                    // Add visual effect for error
+                    const currentCell = sensorCells[currentSensorIndex];
+                    currentCell.classList.add('error');
+                    setTimeout(() => {
+                        currentCell.classList.remove('error');
+                    }, 1000);
+                    
+                    return false;
+                }
+            }
+            
+            // Function to update progress bar
+            function updateProgress() {
+                const totalSensors = 24;
+                const scannedCount = scannedSensors.length;
+                const progressPercent = Math.round((scannedCount / totalSensors) * 100);
+                
+                progressFill.style.width = `${progressPercent}%`;
+                progressPercentage.textContent = `${progressPercent}%`;
+            }
+            
+            // Function to add log entry
+            function addLogEntry(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logItem = document.createElement('div');
+                logItem.classList.add('log-item', type);
+                logItem.innerHTML = `
+                    <span class="log-time">${timestamp}</span>
+                    <span class="log-message">${message}</span>
+                `;
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            }
+            
+            // Function to show notification
+            function showNotification(message, type = 'info') {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = 'notification';
+                notification.classList.add(type);
+                notification.style.display = 'block';
+                
+                setTimeout(() => {
+                    notification.style.opacity = '1';
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    setTimeout(() => {
+                        notification.style.display = 'none';
+                    }, 300);
+                }, 3000);
+            }
+            
+            // Event listeners
+            scanButton.addEventListener('click', function() {
+                const barcode = barcodeInput.value.trim();
+                if (barcode) {
+                    verifyBarcode(barcode);
+                    barcodeInput.value = '';
+                } else {
+                    showNotification('Please enter a barcode', 'error');
+                }
+                barcodeInput.focus();
+            });
+            
+            barcodeInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const barcode = barcodeInput.value.trim();
+                    if (barcode) {
+                        verifyBarcode(barcode);
+                        barcodeInput.value = '';
+                    } else {
+                        showNotification('Please enter a barcode', 'error');
+                    }
+                }
+            });
+            
+            // When complete button is clicked
+            completeButton.addEventListener('click', function() {
+                completeButton.disabled = true;
+                
+                const id = getAssemblyId();
+                if (!id) {
+                    showNotification('Error: No assembly ID found', 'error');
+                    completeButton.disabled = false;
+                    return;
+                }
+                
+                assemblyId = id; // Ensure assemblyId is set correctly
+                
+                // Prepare data for submission
+                const assemblyData = {
+                    operator: 'Current User',
+                    notes: 'Assembly completed via YBS assembly interface',
+                    scanned_parts: scannedSensors.map(sensor => ({
+                        sensorId: sensor.sensorId,
+                        part_code: sensor.barcode
+                    }))
+                };
+                
+                // Show processing message
+                showNotification('Processing...', 'info');
+                addLogEntry('Completing assembly process...', 'info');
+                
+                // Send the data to the server
+                fetch(`/api/assembly-process/${assemblyId}/complete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(assemblyData)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Success - show notification
+                    showNotification('Assembly completed successfully! Data has been saved.', 'success');
+                    addLogEntry('Assembly completed and verified. Data saved to database.', 'success');
+                    
+                    // Update button text
+                    setTimeout(() => {
+                        completeButton.textContent = 'Assembly Completed ✓';
+                        
+                        // If this was part of a multi-unit work order, show a message
+                        if (data.next_unit) {
+                            showNotification(`This work order has multiple units. Please continue with the next assembly: Serial #${data.next_unit.serial_number}`, 'info');
+                            
+                            // Offer to start the next assembly after a delay
+                            setTimeout(() => {
+                                if (confirm('Would you like to continue with the next assembly?')) {
+                                    // Navigate to the new assembly
+                                    window.location.href = `?id=${data.next_unit.id}`;
+                                } else {
+                                    // Navigate back to the assembly manager
+                                    window.location.href = '/assembly/ysb';
+                                }
+                            }, 2000);
+                        } else {
+                            // Work order is complete
+                            setTimeout(() => {
+                                showNotification('All assemblies for this work order are complete!', 'success');
+                                window.location.href = '/assembly/ysb';
+                            }, 3000);
+                        }
+                    }, 1000);
+                    
+                    // Clear localStorage on completion
+                    localStorage.removeItem('currentYBSAssemblyId');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('Failed to save assembly data. Please try again.', 'error');
+                    addLogEntry('Error saving assembly data to the server.', 'error');
+                    completeButton.disabled = false;
+                });
+            });
+            
+            // Initialize the page - load previous state or start fresh
+            loadAssemblyState().then(loaded => {
+                if (!loaded) {
+                    addLogEntry('Starting new assembly. Please scan components in the following order:', 'info');
+                    addLogEntry('1. Left Slave PCB, 2. Master PCB, 3. Right Slave PCB', 'info');
+                    addLogEntry('4. Board-to-Board (Left-Master), 5. Board-to-Board (Master-Right)', 'info');
+                    addLogEntry('6. P&C Cable, 7-30. All 24 sensors in sequence', 'info');
+                }
+                // Focus the barcode input
+                barcodeInput.focus();
+            });
+
+            // Updated component and sensor barcodes for YBS Machine - Duct Number 41
+            const components = {
+                // PCBs
+                "left_pcb": {
+                    barcode: "V22CL0065",
+                    name: "Left Slave PCB",
+                    element: document.querySelector('.left-pcb'),
+                    scanned: false,
+                    index: 1
+                },
+                "master_pcb": {
+                    barcode: "V22C80087",
+                    name: "Master PCB",
+                    element: document.querySelector('.master-pcb'),
+                    scanned: false,
+                    index: 2
+                },
+                "right_pcb": {
+                    barcode: "V22CR0129",
+                    name: "Right Slave PCB",
+                    element: document.querySelector('.right-pcb'),
+                    scanned: false,
+                    index: 3
+                },
+                
+                // Board-to-Board connections
+                "b2b_left_master": {
+                    barcode: "P22BV0584",
+                    name: "Board-to-Board (Left to Master)",
+                    element: document.querySelectorAll('.board-to-board')[0],
+                    scanned: false,
+                    index: 4
+                },
+                "b2b_master_right": {
+                    barcode: "P22BV0476",
+                    name: "Board-to-Board (Master to Right)",
+                    element: document.querySelectorAll('.board-to-board')[1],
+                    scanned: false,
+                    index: 5
+                },
+                
+                // Power & Communication Cable
+                "pc_cable": {
+                    barcode: "P22AQ0131",
+                    name: "Power & Communication Cable",
+                    element: document.querySelector('.power-cable'),
+                    scanned: false,
+                    index: 6
+                }
+            };
+            
+            // Updated sensor barcodes are already defined above
+            
+            // Update the verifyBarcode function to handle the new assembly sequence
+            async function verifyBarcode(barcode) {
+                const trimmedBarcode = barcode.trim();
+                
+                // Check if we're scanning components first (PCBs, cables, etc.)
+                if (currentSensorIndex === 1) {
+                    // We should be scanning components in sequence
+                    const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                    const nextComponent = componentsArray.find(comp => !comp.scanned);
+                    
+                    if (!nextComponent) {
+                        // All components scanned, start scanning sensors
+                        currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                        showNotification("All components verified! Start scanning sensors in sequence.", "success");
+                        
+                        // Mark the first sensor as next
+                        if (sensorCells[1]) {
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            sensorCells[1].classList.add('next');
+                        }
+                        
+                        // Update tooltip to indicate next sensor
+                        sensorCells[1].setAttribute(
+                            'data-tooltip', 
+                            `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
+                        );
+                        
+                        return false;
+                    }
+                    
+                    // Check if the scanned barcode matches the next component
+                    if (trimmedBarcode === nextComponent.barcode) {
+                        // Success - mark the component as scanned
+                        nextComponent.scanned = true;
+                        nextComponent.element.style.backgroundColor = 'var(--status-success)';
+                        
+                        // Add to scanned sensors list
+                        const newScan = {
+                            sensorId: `component_${nextComponent.index}`,
+                            barcode: trimmedBarcode,
+                            timestamp: new Date(),
+                            status: 'success',
+                            componentName: nextComponent.name
+                        };
+                        
+                        scannedSensors.push(newScan);
+                        
+                        // Save this scan to the database
+                        await saveCurrentScan({
+                            sensorId: nextComponent.index,
+                            barcode: trimmedBarcode,
+                        });
+                        
+                        // Add log entry
+                        addLogEntry(`${nextComponent.name} verified successfully: ${trimmedBarcode}`, 'success');
+                        
+                        // Show notification
+                        showNotification(`${nextComponent.name} verified successfully!`, 'success');
+                        
+                        // Check if all components are scanned
+                        const allComponentsScanned = Object.values(components).every(comp => comp.scanned);
+                        
+                        if (allComponentsScanned) {
+                            // All components scanned, start scanning sensors
+                            currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                            
+                            // Update the current sensor index in the database
+                            await updateCurrentSensorIndex();
+                            
+                            // Mark the first sensor as next
+                            if (sensorCells[1]) {
+                                // Clear any existing 'next' markers
+                                document.querySelectorAll('.next').forEach(cell => {
+                                    cell.classList.remove('next');
+                                });
+                                sensorCells[1].classList.add('next');
+                            }
+                            
+                            // Update tooltip to indicate next sensor
+                            sensorCells[1].setAttribute(
+                                'data-tooltip', 
+                                `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
+                            );
+                            
+                            addLogEntry('All components scanned! Now scan sensors in sequence.', 'info');
+                            showNotification('All components verified! Now scan sensors in sequence.', 'success');
+                        } else {
+                            // Find the next component to scan
+                            const nextUpComponent = componentsArray.find(comp => !comp.scanned);
+                            addLogEntry(`Next scan: ${nextUpComponent.name} (${nextUpComponent.barcode})`, 'info');
+                        }
+                        
+                        // Update progress
+                        updateProgress();
+                        
+                        return true;
+                    } else {
+                        // Error - wrong barcode
+                        addLogEntry(`Error: Expected ${nextComponent.name} (${nextComponent.barcode}), got ${trimmedBarcode}`, 'error');
+                        showNotification(`Wrong component scanned! Expected ${nextComponent.name}`, 'error');
+                        
+                        // Add visual effect for error
+                        const originalColor = nextComponent.element.style.backgroundColor;
+                        nextComponent.element.style.backgroundColor = 'var(--status-error)';
+                        setTimeout(() => {
+                            nextComponent.element.style.backgroundColor = originalColor;
+                        }, 1000);
+                        
+                        return false;
+                    }
+                } else {
+                    // We're scanning sensors (sensorIndex >= 7)
+                    const sensorIdToCheck = currentSensorIndex - 6; // Convert from sequence index to sensor ID
+                    
+                    // Check if this is the expected sensor
+                    const expectedBarcode = sensorBarcodes[sensorIdToCheck];
+                    
+                    if (trimmedBarcode === expectedBarcode) {
+                        // Success - mark the sensor as scanned
+                        sensorCells[sensorIdToCheck].classList.remove('next');
+                        sensorCells[sensorIdToCheck].classList.add('success');
+                        
+                        // Add to scanned sensors list
+                        const newSensor = {
+                            sensorId: sensorIdToCheck,
+                            barcode: trimmedBarcode,
+                            timestamp: new Date(),
+                            status: 'success'
+                        };
+                        
+                        scannedSensors.push(newSensor);
+                        
+                        // Save this scan to the database
+                        await saveCurrentScan({
+                            sensorId: currentSensorIndex, // Use original index for the API
+                            barcode: trimmedBarcode,
+                        });
+                        
+                        // Add log entry
+                        addLogEntry(`Sensor #${sensorIdToCheck} verified successfully: ${trimmedBarcode}`, 'success');
+                        
+                        // Show notification
+                        showNotification(`Sensor #${sensorIdToCheck} verified successfully!`, 'success');
+                        
+                        // Move to next sensor
+                        currentSensorIndex++;
+                        
+                        // Update the current sensor index in the database
+                        await updateCurrentSensorIndex();
+                        
+                        // Update progress
+                        updateProgress();
+                        
+                        // Mark next sensor if available
+                        const nextSensorId = currentSensorIndex - 6;
+                        
+                        if (nextSensorId <= 24) {
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            
+                            // Mark the next sensor
+                            if (sensorCells[nextSensorId]) {
+                                sensorCells[nextSensorId].classList.add('next');
+                                
+                                // Update tooltip to indicate next sensor
+                                sensorCells[nextSensorId].setAttribute(
+                                    'data-tooltip', 
+                                    `Sensor #${nextSensorId} - Next to scan: ${sensorBarcodes[nextSensorId]}`
+                                );
+                            }
+                        } else {
+                            // All sensors scanned, show complete button
+                            completeButton.classList.remove('hidden');
+                            completeButton.disabled = false;
+                            showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
+                        }
+                        
+                        return true;
+                    } else {
+                        // Error - wrong barcode
+                        addLogEntry(`Error: Expected Sensor #${sensorIdToCheck} (${expectedBarcode}), got ${trimmedBarcode}`, 'error');
+                        showNotification(`Wrong sensor scanned! Expected Sensor #${sensorIdToCheck}`, 'error');
+                        
+                        // Add visual effect for error
+                        const currentCell = sensorCells[sensorIdToCheck];
+                        currentCell.classList.add('error');
+                        setTimeout(() => {
+                            currentCell.classList.remove('error');
+                        }, 1000);
+                        
+                        return false;
+                    }
+                }
+            }
+            
+            // Override the existing updateProgress function to handle the new sequence
+            function updateProgress() {
+                const totalItems = 30; // 6 components + 24 sensors
+                let scannedCount = scannedSensors.length;
+                
+                // Ensure we don't exceed 100%
+                if (scannedCount > totalItems) scannedCount = totalItems;
+                
+                const progressPercent = Math.round((scannedCount / totalItems) * 100);
+                
+                progressFill.style.width = `${progressPercent}%`;
+                progressPercentage.textContent = `${progressPercent}%`;
+            }
+            
+            // Add support for loading prior component scans when reloading the page
+            async function loadAssemblyState() {
+                // First check if there's an assembly ID in the URL
+                const id = getAssemblyId();
+                const workOrderId = getWorkOrderId();
+                
+                if (!id) {
+                    // No assembly ID in URL - handle as before
+                    if (workOrderId && !creationAttempted) {
+                        creationAttempted = true;
+                        addLogEntry(`Creating new assembly for work order #${workOrderId}`, 'info');
+                        const newAssembly = await createAssemblyProcess(workOrderId);
+                        if (newAssembly) {
+                            assemblyId = newAssembly.id;
+                            currentSensorIndex = 1; // Start with components
+                            return true;
+                        } else {
+                            // Failed to create assembly
+                            addLogEntry('Failed to create assembly', 'error');
+                            showNotification('Failed to create assembly. Please return to work orders page.', 'error');
+                            
+                            // Show a simple interface to get back
+                            document.getElementById('mainContainer').innerHTML = `
+                                <div style="text-align: center; padding: 2rem;">
+                                    <h2 style="color: #dc2626; margin-bottom: 1rem;">Assembly Creation Failed</h2>
+                                    <p>Unable to create assembly. The work order may not exist or there might be a server issue.</p>
+                                    <button onclick="window.location.href='/assembly'" 
+                                            style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                                   border: none; border-radius: 0.375rem; margin-top: 1rem; 
+                                                   cursor: pointer;">
+                                        Return to Assembly Page
+                                    </button>
+                                </div>
+                            `;
+                            return false;
+                        }
+                    } else if (!creationAttempted) {
+                        // Handle as before - try to get available work orders
+                        // ...existing code...
+                    } else {
+                        return false;
+                    }
+                }
+                
+                // We have an assembly ID, load its state
+                assemblyId = id;
+                
+                try {
+                    const response = await fetch(`/api/assembly-process/${id}/`);
+                    if (!response.ok) {
+                        throw new Error('Failed to load assembly state');
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Loaded assembly data:', data);
+                    
+                    // Set the current sensor index
+                    currentSensorIndex = data.current_sensor_index || 1;
+                    
+                    // Load scanned parts
+                    if (data.scanned_parts && data.scanned_parts.length > 0) {
+                        scannedSensors = data.scanned_parts.map(part => ({
+                            sensorId: part.sensor_id,
+                            barcode: part.part_code,
+                            timestamp: new Date(part.scan_time),
+                            status: 'success'
+                        }));
+                        
+                        // Process each scanned part
+                        scannedSensors.forEach(scan => {
+                            // Check if this is a component (1-6) or a sensor (7-30)
+                            if (scan.sensorId <= 6) {
+                                // This is a component scan - find the component and mark it as scanned
+                                const component = Object.values(components).find(c => c.index === scan.sensorId);
+                                if (component) {
+                                    component.scanned = true;
+                                    component.element.style.backgroundColor = 'var(--status-success)';
+                                }
+                            } else {
+                                // This is a sensor scan - find the sensor and mark it as success
+                                const sensorId = scan.sensorId - 6; // Convert from sequence index to sensor ID
+                                if (sensorCells[sensorId]) {
+                                    sensorCells[sensorId].classList.add('success');
+                                }
+                            }
+                        });
+                        
+                        // Mark the next item to scan
+                        if (currentSensorIndex <= 6) {
+                            // We're still scanning components
+                            const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                            const nextComponent = componentsArray.find(comp => !comp.scanned);
+                            
+                            if (nextComponent) {
+                                addLogEntry(`Next scan: ${nextComponent.name} (${nextComponent.barcode})`, 'info');
+                            } else {
+                                // All components scanned, move to sensors
+                                currentSensorIndex = 7;
+                                
+                                // Mark the first sensor as next
+                                if (sensorCells[1]) {
+                                    // Clear any existing 'next' markers
+                                    document.querySelectorAll('.next').forEach(cell => {
+                                        cell.classList.remove('next');
+                                    });
+                                    sensorCells[1].classList.add('next');
+                                }
+                            }
+                        } else if (currentSensorIndex <= 30) {
+                            // We're scanning sensors
+                            const sensorId = currentSensorIndex - 6;
+                            
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            
+                            // Mark the current sensor as next if it exists
+                            if (sensorCells[sensorId]) {
+                                sensorCells[sensorId].classList.add('next');
+                            }
+                        } else {
+                            // All items scanned
+                            completeButton.classList.remove('hidden');
+                            completeButton.disabled = false;
+                        }
+                        
+                        // Add log entries for loaded parts
+                        addLogEntry('Previous assembly state loaded', 'info');
+                        
+                        // Show next step message based on current index
+                        if (currentSensorIndex <= 6) {
+                            const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                            const nextComponent = componentsArray.find(comp => !comp.scanned);
+                            if (nextComponent) {
+                                addLogEntry(`Continuing with component: ${nextComponent.name}`, 'info');
+                            } else {
+                                addLogEntry('All components scanned. Continue with sensors.', 'info');
+                            }
+                        } else if (currentSensorIndex <= 30) {
+                            const sensorId = currentSensorIndex - 6;
+                            addLogEntry(`Continuing from Sensor #${sensorId}`, 'info');
+                        } else {
+                            addLogEntry('All items scanned. Complete the assembly.', 'info');
+                        }
+                        
+                        // Update progress
+                        updateProgress();
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error loading assembly state:', error);
+                    addLogEntry('Failed to load previous assembly state', 'error');
+                    
+                    // Show error but don't try to create a new assembly automatically
+                    showNotification('Error loading assembly. Please return to work orders page.', 'error');
+                    return false;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

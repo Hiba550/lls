@@ -1,0 +1,82 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production & QA System | LLS Automation</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo">LLS Automation</div>
+      <nav class="nav-links">
+        <a href="/docs/">API Docs</a>
+        <a href="/admin/">Admin</a>
+        <a href="/api/">API</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>Integrated Production & QA System</h1>
+      <p>Streamline your manufacturing processes, quality control, and inventory management with our industry-grade solution.</p>
+      <a href="/docs/" class="btn">Explore API Documentation</a>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="section-title">
+        <h2>Key Features</h2>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3><i class="fas fa-tasks"></i> Work Order Management</h3>
+          <p>Create, track, and manage work orders efficiently with our comprehensive management system.</p>
+        </div>
+        <div class="feature-card">
+          <h3><i class="fas fa-cogs"></i> Assembly Processes</h3>
+          <p>Define and monitor assembly processes with detailed steps and quality checkpoints.</p>
+        </div>
+        <div class="feature-card">
+          <h3><i class="fas fa-boxes"></i> Inventory Control</h3>
+          <p>Keep track of materials, parts, and finished products with our item master system.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="api-section">
+    <div class="container">
+      <div class="section-title">
+        <h2>API Resources</h2>
+        <p>Access our comprehensive API endpoints to integrate with your systems</p>
+      </div>
+      <div class="api-links">
+        <a href="/api/assembly-process/" class="api-link">
+          <h3>Assembly</h3>
+          <p>Access assembly process data</p>
+        </a>
+        <a href="/api/work-order/" class="api-link">
+          <h3>Work Orders</h3>
+          <p>Manage manufacturing work orders</p>
+        </a>
+        <a href="/api/item-master/" class="api-link">
+          <h3>Item Master</h3>
+          <p>Access inventory and parts data</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 LLS Automation Division. All rights reserved.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,9 @@
+Django==4.2
+djangorestframework==3.14
+django-cors-headers==4.0
+mysqlclient
+Pillow
+django-filter
+coreapi
+pyyaml
+drf-yasg

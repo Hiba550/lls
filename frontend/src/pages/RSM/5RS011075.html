@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive YBS Machine Circuit Board Layout - 5YB011059 (Corrected Ranges)</title>
+    <style>
+        :root {
+            --left-pcb-color: #b5e6b5;
+            --master-pcb-color: #d3d3d3;
+            --right-pcb-color: #a8e4f0;
+            --highlight-yellow: #ffeb3b;
+            --board-to-board-color: #999;
+            --board-to-board-green: #5c9e31;
+            --border-color: #aaa;
+            --hover-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+            --transition-speed: 0.2s;
+            --bg-color-body: #f8f8f8;
+            --bg-color-container: #fff;
+            --text-color-dark: #333;
+            --text-color-light: #f1f5f9;
+            --header-border-color: #ddd;
+            --component-name-bg: #e9ecef;
+            --component-name-text: var(--text-color-dark);
+            --tooltip-bg: rgba(54, 69, 79, 0.95);
+            --tooltip-text: var(--text-color-light);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 1.5rem;
+            background-color: var(--bg-color-body);
+            color: var(--text-color-dark);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--bg-color-container);
+            border-radius: 0.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--header-border-color);
+        }
+
+        .title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-color-dark);
+            margin-bottom: 0.75rem;
+            text-shadow: 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .part-id {
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #f97316;
+            color: var(--text-color-light);
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .board-to-board-title {
+            color: #38bdf8;
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin: 1.5rem 0;
+            text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
+            position: relative;
+        }
+
+        .board-to-board-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+        }
+
+        .circuit-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1.5px solid var(--border-color);
+            border-radius: 0.375rem;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 10;
+            background-color: #fff;
+        }
+
+        .circuit-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.25rem;
+            font-size: 0.75rem;
+            height: 2.5rem;
+            position: relative;
+            transition: all var(--transition-speed) ease;
+        }
+
+        .component-name {
+            text-align: left;
+            font-weight: 700;
+            padding-left: 1rem;
+            background-color: var(--component-name-bg);
+            color: var(--component-name-text);
+            width: 8rem;
+            vertical-align: middle;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .component-name::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,0,0,0.05));
+        }
+
+        .cell {
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition-speed) ease;
+        }
+
+        .cell:hover {
+            transform: scale(1.05);
+            box-shadow: var(--hover-shadow);
+            z-index: 100;
+        }
+
+        .sensor-cell {
+            width: 1.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background-color: #fff9e6;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        .highlighted-sensor {
+            background-color: var(--highlight-yellow);
+            font-weight: 700;
+            color: #333;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .highlighted-sensor::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 0.5rem;
+            height: 0.5rem;
+            background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%);
+        }
+
+        .left-pcb {
+            background-color: var(--left-pcb-color);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .left-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .master-pcb {
+            background-color: var(--master-pcb-color);
+            color: var(--text-color-dark);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .master-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .right-pcb {
+            background-color: var(--right-pcb-color);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .right-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .board-to-board {
+            background-color: var(--board-to-board-color);
+            color: var(--text-color-light);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.2;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+            cursor: pointer;
+        }
+
+        .board-to-board-green {
+            background-color: var(--board-to-board-green);
+            color: var(--text-color-light);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.2;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+            cursor: pointer;
+        }
+
+        .power-cable {
+            background-color: #ffffff;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.75rem 0.25rem;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, #f9f9f9, #ffffff);
+            cursor: pointer;
+        }
+
+        .empty-cell {
+            background-color: #ffffff;
+        }
+
+        .circuit-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .circuit-lines::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 40% 70%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 50% 40%, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+            background-size: 100px 100px;
+        }
+
+        .glow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05), transparent 70%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: var(--tooltip-bg);
+            color: var(--tooltip-text);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 200px;
+            z-index: 1000;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            transform: translateY(10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 0 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent var(--tooltip-bg);
+        }
+
+        .connection-line {
+            position: absolute;
+            background: rgba(56, 189, 248, 0.4);
+            height: 2px;
+            z-index: 15;
+            transform-origin: left;
+            transform: scaleX(0);
+            pointer-events: none;
+        }
+
+        .connection-line.active {
+            transform: scaleX(1);
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0.5); }
+            70% { box-shadow: 0 0 0 8px rgba(255, 235, 59, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @media (max-width: 992px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .component-name {
+                width: 6rem;
+                font-size: 0.7rem;
+            }
+
+            .sensor-cell {
+                width: 1.5rem;
+                font-size: 0.75rem;
+                padding: 0.25rem 0.125rem;
+            }
+
+            .left-pcb, .master-pcb, .right-pcb {
+                font-size: 0.65rem;
+                padding: 0.5rem 0.125rem;
+            }
+
+            .power-cable {
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 1.5rem;
+            }
+
+            .board-to-board-title {
+                font-size: 1.75rem;
+            }
+
+            .circuit-table {
+                font-size: 0.65rem;
+            }
+
+            .component-name {
+                width: 5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <div class="header">
+            <div class="part-id">5RS011075 <br> 1Master 3Slave <br> 75 mm</div>
+            <h1 class="title">RAP - ILI DUCT ASSEMBLY</h1>
+        </div>
+
+        <div class="board-to-board-title">Board to Board</div>
+
+        <div class="circuit-lines"></div>
+        <div class="glow"></div>
+
+        <table class="circuit-table" id="circuitTable">
+            <tr>
+                <td class="component-name">PCB BOARD</td>
+                <td class="left-pcb cell" colspan="6" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                <td class="left-pcb cell" colspan="6" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                <td class="left-pcb cell" colspan="6" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                <td class="master-pcb cell" colspan="6" data-tooltip="ASSEMBLED RSM MASTER PCB BL Ver">ASSEMBLED RSM MASTER PCB BL Ver</td>
+            </tr>
+            <tr>
+                <td class="component-name">Joining Cable</td>
+                <td class="cell empty-cell" colspan="2"></td>
+                <td class="cell board-to-board" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM" style="background-color: var(--slave-to-slave-cable); color: var(--text-color-dark);">Slave to Slave PCB <br>( 10-12) - 120MM</td>
+                <td class="cell empty-cell" colspan="4" style="transition: 0.3s;width: 46.6px;"></td>
+                <td class="cell board-to-board" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM" style="background-color: var(--slave-to-slave-cable); color: var(--text-color-dark);">Slave to Slave PCB <br>( 10-12) - 120MM</td>
+                <td class="cell empty-cell" colspan="4" style="transition: 0.3s;width: 46.6px;"></td>
+                <td class="cell board-to-board" colspan="4" data-tooltip="Master to Right slave PCB (10-10) - 90MM" style="background-color: var(--master-to-slave-cable); color: var(--text-color-dark);">Master to Right slave PCB <br>(10-10) - 90MM</td>
+                <td class="cell empty-cell" colspan="2"></td>
+            </tr>
+            <tr>
+                <td class="component-name">P&C Cable</td>
+                <td class="power-cable cell" colspan="24" data-tooltip="RSM - POWER & COMMUNICATION CABLE ASSY with RMC - BL Ver - (75mm Pitch)">RSM - POWER & COMMUNICATION CABLE ASSY with RMC - BL Ver - (75mm Pitch)</td>
+            </tr>
+        </table>
+
+        <div id="tooltip" class="tooltip"></div>
+        <div id="connectionLine1" class="connection-line"></div>
+        <div id="connectionLine2" class="connection-line"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const highlightedSensors = document.querySelectorAll('.highlighted-sensor');
+            highlightedSensors.forEach(sensor => {
+                sensor.classList.add('pulse');
+            });
+
+            const cells = document.querySelectorAll('.cell');
+            const tooltip = document.getElementById('tooltip');
+
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', function(e) {
+                    const tooltipText = this.getAttribute('data-tooltip');
+                    if (tooltipText) {
+                        tooltip.textContent = tooltipText;
+                        tooltip.classList.add('show');
+
+                        const rect = this.getBoundingClientRect();
+                        const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                        tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
+                        tooltip.style.top = rect.bottom + 10 + 'px';
+
+                        if (parseFloat(tooltip.style.left) < tableRect.left) {
+                            tooltip.style.left = tableRect.left + 'px';
+                        } else if (parseFloat(tooltip.style.left) + tooltip.offsetWidth > tableRect.right) {
+                            tooltip.style.left = tableRect.right - tooltip.offsetWidth + 'px';
+                        }
+                    }
+                });
+
+                cell.addEventListener('mouseleave', function() {
+                    tooltip.classList.remove('show');
+                });
+            });
+
+            const boardToBoard = document.querySelectorAll('.board-to-board');
+            const connectionLine1 = document.getElementById('connectionLine1');
+            const connectionLine2 = document.getElementById('connectionLine2');
+
+            const line1 = boardToBoard[0];
+            line1.addEventListener('mouseenter', function() {
+                const lineRect = line1.getBoundingClientRect();
+                const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                connectionLine1.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                connectionLine1.style.left = tableRect.left + 160 + 'px';
+                connectionLine1.style.width = '200px';
+
+                setTimeout(() => {
+                    connectionLine1.classList.add('active');
+                }, 50);
+            });
+
+            line1.addEventListener('mouseleave', function() {
+                connectionLine1.classList.remove('active');
+            });
+
+            const line2 = boardToBoard[1];
+            line2.addEventListener('mouseenter', function() {
+                const lineRect = line2.getBoundingClientRect();
+                const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                connectionLine2.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                connectionLine2.style.left = tableRect.left + 400 + 'px';
+                connectionLine2.style.width = '200px';
+
+                setTimeout(() => {
+                    connectionLine2.classList.add('active');
+                }, 50);
+            });
+
+            line2.addEventListener('mouseleave', function() {
+                connectionLine2.classList.remove('active');
+            });
+
+            setTimeout(() => {
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach(cell => {
+                    cell.style.transition = 'all 0.3s ease';
+                });
+            }, 500);
+        });
+    </script>
+</body>
+</html>
