@@ -18,14 +18,14 @@ const WorkOrderManagement = () => {
       <ToastContainer position="top-right" autoClose={3000} />
       
       <Routes>
-        <Route path="/" element={<WorkOrders />} />
-        <Route path="/create" element={<WorkOrderForm />} />
-        <Route path="/:id" element={<WorkOrderDetail />} />
-        <Route path="/:id/edit" element={<WorkOrderForm />} />
-        <Route path="/ysb/*" element={<YSBAssemblyManager />} />
-        <Route path="/rsm/*" element={<RSMAssemblyManager />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+  <Route path="/" element={<WorkOrders />} />
+  <Route path="/create" element={<WorkOrderForm />} />
+  <Route path="/:id" element={<WorkOrderDetail />} />
+  <Route path="/:id/edit" element={<WorkOrderForm />} />
+  <Route path="/ysb/*" element={<YSBAssemblyManager />} />
+  <Route path="/rsm/*" element={<RSMAssemblyManager />} />
+  <Route path="*" element={<Navigate to="/" replace />} />
+</Routes>
     </div>
   );
 };

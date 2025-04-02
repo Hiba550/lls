@@ -1675,6 +1675,592 @@
             }
         }
     </script>
+    <!-- Add this script in the head or before your existing script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Existing sensor barcode mapping code
+            const sensorBarcodes = {
+                1: "R22J200177",
+                2: "R22J102367",
+                3: "R22J102368",
+                4: "R22J102440",
+                5: "R22J102371",
+                6: "R22J102389",
+                7: "R22J102390",
+                8: "R22J102391",
+                9: "R22J102392",
+                10: "R22J102393",
+                11: "R22J102394",
+                12: "R22J102395",
+                13: "R22J102396",
+                14: "R22J102397",
+                15: "R22J102398",
+                16: "R22J102399",
+                17: "R22J102400",
+                18: "R22J102401",
+                19: "R22J102402",
+                20: "R22J102403",
+                21: "R22J102404",
+                22: "R22J102405",
+                23: "R22J102406",
+                24: "R22J102407"
+            };
+            
+            // NEW: Component code mapping for PCB and component verification
+            const componentCodeMap = {
+                // Components
+                "left_pcb": "24",         // Left slave - code "24" (2 in 5th position, 4 in 6th)
+                "master_pcb": "25",       // Master - code "25" (2 in 5th position, 5 in 6th)
+                "right_pcb": "3Q4",       // Right PCB - code "3Q4" (3 in 5th, Q in 6th, 4 in 7th)
+                "b2b_left_master": "O",   // B2B (left-master) - code "O" (O in 5th position)
+                "b2b_master_right": "P",  // B2B (master-right) - code "P" (P in 5th position)
+                "pc_cable": "J",          // P&C cable - code "J" (J in 5th position)
+            };
+
+            // NEW: Sensor code mapping - individual codes for each sensor
+            const sensorCodeMap = {
+                1: "1",    // Sensor 1: code "1"
+                2: "1",    // Sensor 2: code "1"
+                3: "1",    // Sensor 3: code "1"
+                4: "1",    // Sensor 4: code "1"
+                5: "1",    // Sensor 5: code "1"
+                6: "1",    // Sensor 6: code "1"
+                7: "1",    // Sensor 7: code "1"
+                8: "1",    // Sensor 8: code "1"
+                9: "1",    // Sensor 9: code "1"
+                10: "1",   // Sensor 10: code "1"
+                11: "1",   // Sensor 11: code "1"
+                12: "1",   // Sensor 12: code "1"
+                13: "2",   // Sensor 13: code "2"
+                14: "2",   // Sensor 14: code "2"
+                15: "2",   // Sensor 15: code "2"
+                16: "2",   // Sensor 16: code "2"
+                17: "2",   // Sensor 17: code "2"
+                18: "2",   // Sensor 18: code "2"
+                19: "2",   // Sensor 19: code "2"
+                20: "2",   // Sensor 20: code "2"
+                21: "2",   // Sensor 21: code "2"
+                22: "2",   // Sensor 22: code "2"
+                23: "",    // Sensor 23: no code (automatically passes)
+                24: ""     // Sensor 24: no code (automatically passes)
+            };
+            
+            // Initialize variables
+            let currentSensorIndex = 1;
+            let scannedSensors = [];
+            let assemblyId = null; // Store the assembly ID
+            // Get elements
+            const barcodeInput = document.getElementById('barcodeInput');
+            const scanButton = document.getElementById('scanButton');
+            const completeButton = document.getElementById('completeButton');
+            const progressFill = document.getElementById('progressFill');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const logsContent = document.getElementById('logsContent');
+            const sensorCells = {};
+            
+            // Initialize sensor cells
+            document.querySelectorAll('.sensor-cell').forEach(cell => {
+                const sensorId = parseInt(cell.getAttribute('data-sensor-id'));
+                sensorCells[sensorId] = cell;
+                
+                // Set initial tooltip
+                cell.setAttribute('data-tooltip', `Sensor #${sensorId}: ${sensorBarcodes[sensorId]}`);
+            });
+            
+            // Mark the first sensor as next by default
+            sensorCells[1].classList.add('next');
+            
+            // Get assembly ID from URL parameters
+            function getAssemblyId() {
+                // First try from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const id = urlParams.get('id');
+                
+                if (id) {
+                    // If found in URL, also save to localStorage for persistence
+                    localStorage.setItem('currentYBSAssemblyId', id);
+                    return id;
+                }
+                
+                // Fallback to localStorage if not in URL
+                return localStorage.getItem('currentYBSAssemblyId');
+            }
+            // Get work order ID from URL parameters
+            function getWorkOrderId() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('order');
+            }
+            
+            // NEW: Function to verify code positions in barcode
+            function verifyCodePositions(barcode, expectedCode) {
+                if (!expectedCode || expectedCode === "") {
+                    // If no expected code (like for sensors 23 and 24), it automatically passes
+                    return true;
+                }
+                
+                // Extract the characters at positions 5, 6, and 7 based on the length of expected code
+                const codeLength = expectedCode.length;
+                
+                // Check if barcode is long enough
+                if (barcode.length < 5) {
+                    return false; // Barcode too short to check position 5
+                }
+                
+                // For 1-character codes, check position 5
+                if (codeLength === 1) {
+                    return barcode.charAt(4) === expectedCode;
+                }
+                // For 2-character codes, check positions 5 and 6
+                else if (codeLength === 2) {
+                    return barcode.length >= 6 && 
+                           barcode.charAt(4) === expectedCode.charAt(0) && 
+                           barcode.charAt(5) === expectedCode.charAt(1);
+                }
+                // For 3-character codes, check positions 5, 6, and 7
+                else if (codeLength === 3) {
+                    return barcode.length >= 7 && 
+                           barcode.charAt(4) === expectedCode.charAt(0) && 
+                           barcode.charAt(5) === expectedCode.charAt(1) && 
+                           barcode.charAt(6) === expectedCode.charAt(2);
+                }
+                
+                return false;
+            }
+            
+            // Create a new assembly process if none exists
+            // ...existing code...
+
+            // Function to verify barcode - UPDATED WITH NEW CODE VERIFICATION
+            async function verifyBarcode(barcode) {
+                const trimmedBarcode = barcode.trim();
+                
+                // Check if we're scanning components first (PCBs, cables, etc.)
+                if (currentSensorIndex <= 6) {
+                    // We're in component scanning phase (index 1-6)
+                    const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                    const nextComponent = componentsArray.find(comp => !comp.scanned);
+                    
+                    if (!nextComponent) {
+                        // All components scanned, start scanning sensors
+                        currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                        showNotification("All components verified! Start scanning sensors in sequence.", "success");
+                        
+                        // Mark the first sensor as next
+                        if (sensorCells[1]) {
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            sensorCells[1].classList.add('next');
+                        }
+                        
+                        // Update tooltip
+                        sensorCells[1].setAttribute(
+                            'data-tooltip', 
+                            `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
+                        );
+                        
+                        return false;
+                    }
+                    
+                    // Get the component type and expected code
+                    const componentType = Object.keys(components).find(key => components[key].index === nextComponent.index);
+                    const expectedCode = componentCodeMap[componentType];
+                    
+                    // NEW: Verify the code in the specific positions
+                    if (verifyCodePositions(trimmedBarcode, expectedCode)) {
+                        // Success - mark the component as scanned
+                        nextComponent.scanned = true;
+                        nextComponent.element.style.backgroundColor = 'var(--status-success)';
+                        
+                        // Add to scanned sensors list
+                        const newScan = {
+                            sensorId: `component_${nextComponent.index}`,
+                            barcode: trimmedBarcode,
+                            timestamp: new Date(),
+                            status: 'success',
+                            componentName: nextComponent.name
+                        };
+                        
+                        scannedSensors.push(newScan);
+                        
+                        // Save this scan to the database
+                        await saveCurrentScan({
+                            sensorId: nextComponent.index,
+                            barcode: trimmedBarcode,
+                        });
+                        
+                        // Add log entry
+                        addLogEntry(`${nextComponent.name} verified successfully: ${trimmedBarcode} (Code: ${expectedCode})`, 'success');
+                        
+                        // Show notification
+                        showNotification(`${nextComponent.name} verified successfully!`, 'success');
+                        
+                        // Check if all components are scanned
+                        const allComponentsScanned = Object.values(components).every(comp => comp.scanned);
+                        
+                        if (allComponentsScanned) {
+                            // All components scanned, start scanning sensors
+                            currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                            
+                            // Update the current sensor index in the database
+                            await updateCurrentSensorIndex();
+                            
+                            // Mark the first sensor as next
+                            if (sensorCells[1]) {
+                                // Clear any existing 'next' markers
+                                document.querySelectorAll('.next').forEach(cell => {
+                                    cell.classList.remove('next');
+                                });
+                                sensorCells[1].classList.add('next');
+                            }
+                            
+                            // Update tooltip to indicate next sensor
+                            sensorCells[1].setAttribute(
+                                'data-tooltip', 
+                                `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
+                            );
+                            
+                            addLogEntry('All components scanned! Now scan sensors in sequence.', 'info');
+                            showNotification('All components verified! Now scan sensors in sequence.', 'success');
+                        } else {
+                            // Find the next component to scan
+                            const nextUpComponent = componentsArray.find(comp => !comp.scanned);
+                            const nextComponentType = Object.keys(components).find(key => components[key].index === nextUpComponent.index);
+                            const nextExpectedCode = componentCodeMap[nextComponentType];
+                            
+                            addLogEntry(`Next scan: ${nextUpComponent.name} (Expected code: ${nextExpectedCode})`, 'info');
+                        }
+                        
+                        // Update progress
+                        updateProgress();
+                        
+                        return true;
+                    } else {
+                        // Error - code in positions doesn't match
+                        addLogEntry(`Error: Expected code ${expectedCode} for ${nextComponent.name}, got incorrect code at positions 5${expectedCode.length > 1 ? `-${4 + expectedCode.length}` : ""}`, 'error');
+                        showNotification(`Wrong code for ${nextComponent.name}! Expected ${expectedCode} at position${expectedCode.length > 1 ? "s" : ""} 5${expectedCode.length > 1 ? `-${4 + expectedCode.length}` : ""}`, 'error');
+                        
+                        // Add visual effect for error
+                        const originalColor = nextComponent.element.style.backgroundColor;
+                        nextComponent.element.style.backgroundColor = 'var(--status-error)';
+                        setTimeout(() => {
+                            nextComponent.element.style.backgroundColor = originalColor;
+                        }, 1000);
+                        
+                        return false;
+                    }
+                } else {
+                    // We're scanning sensors (sensorIndex >= 7)
+                    const sensorIdToCheck = currentSensorIndex - 6; // Convert from sequence index to sensor ID
+                    const expectedCode = sensorCodeMap[sensorIdToCheck];
+                    
+                    // NEW: Verify the barcode at the specific positions
+                    if (verifyCodePositions(trimmedBarcode, expectedCode)) {
+                        // Success - mark the sensor as scanned
+                        sensorCells[sensorIdToCheck].classList.remove('next');
+                        sensorCells[sensorIdToCheck].classList.add('success');
+                        
+                        // Add to scanned sensors list
+                        const newSensor = {
+                            sensorId: sensorIdToCheck,
+                            barcode: trimmedBarcode,
+                            timestamp: new Date(),
+                            status: 'success'
+                        };
+                        
+                        scannedSensors.push(newSensor);
+                        
+                        // Save this scan to the database
+                        await saveCurrentScan({
+                            sensorId: currentSensorIndex, // Use original index for the API
+                            barcode: trimmedBarcode,
+                        });
+                        
+                        // Add log entry
+                        const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                        addLogEntry(`Sensor #${sensorIdToCheck} verified successfully: ${trimmedBarcode}${codeInfo}`, 'success');
+                        
+                        // Show notification
+                        showNotification(`Sensor #${sensorIdToCheck} verified successfully!`, 'success');
+                        
+                        // Move to next sensor
+                        currentSensorIndex++;
+                        
+                        // Update the current sensor index in the database
+                        await updateCurrentSensorIndex();
+                        
+                        // Update progress
+                        updateProgress();
+                        
+                        // Mark next sensor if available
+                        const nextSensorId = currentSensorIndex - 6;
+                        
+                        if (nextSensorId <= 24) {
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            
+                            // Mark the next sensor
+                            if (sensorCells[nextSensorId]) {
+                                sensorCells[nextSensorId].classList.add('next');
+                                
+                                // Get the next expected code
+                                const nextExpectedCode = sensorCodeMap[nextSensorId];
+                                const codeDisplay = nextExpectedCode ? ` (Code: ${nextExpectedCode})` : ' (No code required)';
+                                
+                                // Update tooltip to indicate next sensor
+                                sensorCells[nextSensorId].setAttribute(
+                                    'data-tooltip', 
+                                    `Sensor #${nextSensorId} - Next to scan${codeDisplay}`
+                                );
+                            }
+                        } else {
+                            // All sensors scanned, show complete button
+                            completeButton.classList.remove('hidden');
+                            completeButton.disabled = false;
+                            showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
+                        }
+                        
+                        return true;
+                    } else {
+                        // Error - code in positions doesn't match
+                        const errorMessage = expectedCode ? 
+                            `Error: Expected code ${expectedCode} at position${expectedCode.length > 1 ? "s" : ""} 5${expectedCode.length > 1 ? `-${4 + expectedCode.length}` : ""}` :
+                            `Error: Incorrect sensor code for Sensor #${sensorIdToCheck}`;
+                            
+                        addLogEntry(errorMessage, 'error');
+                        showNotification(`Wrong code for Sensor #${sensorIdToCheck}!`, 'error');
+                        
+                        // Add visual effect for error
+                        const currentCell = sensorCells[sensorIdToCheck];
+                        currentCell.classList.add('error');
+                        setTimeout(() => {
+                            currentCell.classList.remove('error');
+                        }, 1000);
+                        
+                        return false;
+                    }
+                }
+            }
+            
+            // Function to update progress bar
+            // ...existing code...
+            
+            // Component definitions for YBS Machine - Duct Number 41
+            const components = {
+                // PCBs
+                "left_pcb": {
+                    barcode: "V22CL0065",
+                    name: "Left Slave PCB",
+                    element: document.querySelector('.left-pcb'),
+                    scanned: false,
+                    index: 1
+                },
+                "master_pcb": {
+                    barcode: "V22C80087",
+                    name: "Master PCB",
+                    element: document.querySelector('.master-pcb'),
+                    scanned: false,
+                    index: 2
+                },
+                "right_pcb": {
+                    barcode: "V22CR0129",
+                    name: "Right Slave PCB",
+                    element: document.querySelector('.right-pcb'),
+                    scanned: false,
+                    index: 3
+                },
+                
+                // Board-to-Board connections
+                "b2b_left_master": {
+                    barcode: "P22BV0584",
+                    name: "Board-to-Board (Left to Master)",
+                    element: document.querySelectorAll('.board-to-board')[0],
+                    scanned: false,
+                    index: 4
+                },
+                "b2b_master_right": {
+                    barcode: "P22BV0476",
+                    name: "Board-to-Board (Master to Right)",
+                    element: document.querySelectorAll('.board-to-board')[1],
+                    scanned: false,
+                    index: 5
+                },
+                
+                // Power & Communication Cable
+                "pc_cable": {
+                    barcode: "P22AQ0131",
+                    name: "Power & Communication Cable",
+                    element: document.querySelector('.power-cable'),
+                    scanned: false,
+                    index: 6
+                }
+            };
+            
+            // Function to add log entry
+            function addLogEntry(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logItem = document.createElement('div');
+                logItem.classList.add('log-entry', type);
+                logItem.innerHTML = `
+                    <span class="log-time">${timestamp}</span>
+                    <span class="log-message">${message}</span>
+                `;
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            }
+            
+            // Function to show notification
+            function showNotification(message, type = 'info') {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = 'notification';
+                notification.classList.add(type);
+                notification.style.display = 'block';
+                
+                setTimeout(() => {
+                    notification.style.opacity = '1';
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    setTimeout(() => {
+                        notification.style.display = 'none';
+                    }, 300);
+                }, 3000);
+            }
+            
+            // Update the highlightNextItem function to display code information
+            async function highlightNextItem() {
+                // Clear any existing highlights
+                document.querySelectorAll('.next').forEach(el => el.classList.remove('next'));
+                
+                if (currentSensorIndex <= 6) {
+                    // We're in the component scanning phase
+                    const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                    const nextComponent = componentsArray.find(comp => !comp.scanned);
+                    
+                    if (nextComponent) {
+                        // Highlight the next component
+                        if (nextComponent.element) {
+                            nextComponent.element.classList.add('next');
+                        }
+                        
+                        // Get the component type and expected code
+                        const componentType = Object.keys(components).find(key => components[key].index === nextComponent.index);
+                        const expectedCode = componentCodeMap[componentType];
+                        
+                        addLogEntry(`Next scan: ${nextComponent.name} (Expected code: ${expectedCode})`, 'info');
+                        showNotification(`Please scan ${nextComponent.name}`, 'info');
+                    } else {
+                        // All components scanned, move to sensors
+                        currentSensorIndex = 7;
+                        
+                        // Mark the first sensor as next
+                        if (sensorCells[1]) {
+                            sensorCells[1].classList.add('next');
+                            
+                            const expectedCode = sensorCodeMap[1];
+                            const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                            sensorCells[1].setAttribute('data-tooltip', `Sensor #1 - Next to scan${codeInfo}`);
+                        }
+                        
+                        addLogEntry('All components scanned. Please start scanning sensors.', 'info');
+                        showNotification('All components scanned. Please start scanning sensors.', 'info');
+                    }
+                } else if (currentSensorIndex <= 30) {
+                    // We're in the sensor scanning phase
+                    const sensorId = currentSensorIndex - 6;
+                    
+                    if (sensorId <= 24) {
+                        // Highlight the next sensor
+                        if (sensorCells[sensorId]) {
+                            sensorCells[sensorId].classList.add('next');
+                            
+                            // Get the expected code
+                            const expectedCode = sensorCodeMap[sensorId];
+                            const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                            
+                            sensorCells[sensorId].setAttribute('data-tooltip', `Sensor #${sensorId} - Next to scan${codeInfo}`);
+                        }
+                        
+                        const expectedCode = sensorCodeMap[sensorId];
+                        const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                        addLogEntry(`Next scan: Sensor #${sensorId}${codeInfo}`, 'info');
+                        showNotification(`Please scan Sensor #${sensorId}`, 'info');
+                    } else {
+                        // All sensors scanned
+                        completeButton.classList.remove('hidden');
+                        completeButton.disabled = false;
+                        
+                        addLogEntry('All sensors scanned. Please complete the assembly.', 'success');
+                        showNotification('All sensors scanned! Click Complete to finish assembly.', 'success');
+                    }
+                } else {
+                    // All items scanned
+                    completeButton.classList.remove('hidden');
+                    completeButton.disabled = false;
+                    
+                    addLogEntry('All items scanned. Please complete the assembly.', 'success');
+                    showNotification('All items scanned! Click Complete to finish assembly.', 'success');
+                }
+                
+                // Save current index to localStorage
+                localStorage.setItem('currentSensorIndex', currentSensorIndex.toString());
+                
+                // Also update on server if possible
+                try {
+                    await updateCurrentSensorIndex();
+                } catch (error) {
+                    console.warn('Failed to update server with current index, using localStorage backup');
+                }
+            }
+            
+            // Event listeners
+            scanButton.addEventListener('click', function() {
+                const barcode = barcodeInput.value.trim();
+                if (barcode) {
+                    verifyBarcode(barcode);
+                    barcodeInput.value = '';
+                } else {
+                    showNotification('Please enter a barcode', 'error');
+                }
+                barcodeInput.focus();
+            });
+            
+            barcodeInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const barcode = barcodeInput.value.trim();
+                    if (barcode) {
+                        verifyBarcode(barcode);
+                        barcodeInput.value = '';
+                    } else {
+                        showNotification('Please enter a barcode', 'error');
+                    }
+                }
+            });
+            
+            // Initialize the page - load previous state or start fresh
+            loadAssemblyState().then(loaded => {
+                if (!loaded) {
+                    addLogEntry('Starting new assembly. Please scan components in the following order:', 'info');
+                    
+                    // Display component codes in the log
+                    Object.keys(components).forEach(key => {
+                        const component = components[key];
+                        const expectedCode = componentCodeMap[key];
+                        addLogEntry(`${component.index}. ${component.name} - Code: ${expectedCode}`, 'info');
+                    });
+                    
+                    addLogEntry('After components, scan all 24 sensors in sequence', 'info');
+                }
+                // Focus the barcode input
+                barcodeInput.focus();
+            });
+        });
+    </script>
 </head>
 <body>
     <div class="container" id="mainContainer">
@@ -1816,12 +2402,50 @@
                 23: "R22J102406",
                 24: "R22J102407"
             };
+            
+            // NEW: Component code mapping for PCB and component verification
+            const componentCodeMap = {
+                // Components
+                "left_pcb": "24",         // Left slave - code "24" (2 in 5th position, 4 in 6th)
+                "master_pcb": "25",       // Master - code "25" (2 in 5th position, 5 in 6th)
+                "right_pcb": "3Q4",       // Right PCB - code "3Q4" (3 in 5th, Q in 6th, 4 in 7th)
+                "b2b_left_master": "O",   // B2B (left-master) - code "O" (O in 5th position)
+                "b2b_master_right": "P",  // B2B (master-right) - code "P" (P in 5th position)
+                "pc_cable": "J",          // P&C cable - code "J" (J in 5th position)
+            };
 
+            // NEW: Sensor code mapping - individual codes for each sensor
+            const sensorCodeMap = {
+                1: "1",    // Sensor 1: code "1"
+                2: "1",    // Sensor 2: code "1"
+                3: "1",    // Sensor 3: code "1"
+                4: "1",    // Sensor 4: code "1"
+                5: "1",    // Sensor 5: code "1"
+                6: "1",    // Sensor 6: code "1"
+                7: "1",    // Sensor 7: code "1"
+                8: "1",    // Sensor 8: code "1"
+                9: "1",    // Sensor 9: code "1"
+                10: "1",   // Sensor 10: code "1"
+                11: "1",   // Sensor 11: code "1"
+                12: "1",   // Sensor 12: code "1"
+                13: "2",   // Sensor 13: code "2"
+                14: "2",   // Sensor 14: code "2"
+                15: "2",   // Sensor 15: code "2"
+                16: "2",   // Sensor 16: code "2"
+                17: "2",   // Sensor 17: code "2"
+                18: "2",   // Sensor 18: code "2"
+                19: "2",   // Sensor 19: code "2"
+                20: "2",   // Sensor 20: code "2"
+                21: "2",   // Sensor 21: code "2"
+                22: "2",   // Sensor 22: code "2"
+                23: "",    // Sensor 23: no code (automatically passes)
+                24: ""     // Sensor 24: no code (automatically passes)
+            };
+            
             // Initialize variables
             let currentSensorIndex = 1;
             let scannedSensors = [];
             let assemblyId = null; // Store the assembly ID
-
             // Get elements
             const barcodeInput = document.getElementById('barcodeInput');
             const scanButton = document.getElementById('scanButton');
@@ -1858,521 +2482,270 @@
                 // Fallback to localStorage if not in URL
                 return localStorage.getItem('currentYBSAssemblyId');
             }
-
             // Get work order ID from URL parameters
             function getWorkOrderId() {
                 const urlParams = new URLSearchParams(window.location.search);
                 return urlParams.get('order');
             }
-
-            // Create a new assembly process if none exists
-            async function createAssemblyProcess(workOrderId) {
-                if (!workOrderId) {
-                    console.error('No work order ID provided');
-                    showNotification('Error: No work order ID provided', 'error');
-                    return null;
+            
+            // NEW: Function to verify code positions in barcode
+            function verifyCodePositions(barcode, expectedCode) {
+                if (!expectedCode || expectedCode === "") {
+                    // If no expected code (like for sensors 23 and 24), it automatically passes
+                    return true;
                 }
                 
-                try {
-                    // Show processing notification
-                    showNotification('Creating new assembly process...', 'info');
-                    
-                    const response = await fetch(`/api/assembly-process/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            work_order: workOrderId,
-                            created_by: 'Current User',
-                            status: 'pending'
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Failed to create assembly process: ${errorText}`);
-                    }
-                    
-                    const data = await response.json();
-                    assemblyId = data.id;
-                    
-                    // Update URL with assembly ID without reloading page
-                    const url = new URL(window.location);
-                    url.searchParams.set('id', assemblyId);
-                    window.history.pushState({}, '', url);
-                    
-                    showNotification(`New assembly process created: ${data.serial_number}`, 'success');
-                    addLogEntry(`Started new assembly with Serial #${data.serial_number}`, 'info');
-                    
-                    return data;
-                } catch (error) {
-                    console.error('Error creating assembly process:', error);
-                    showNotification('Failed to create assembly process. Please try again.', 'error');
-                    addLogEntry('Error: Failed to create assembly process', 'error');
-                    return null;
+                // Extract the characters at positions 5, 6, and 7 based on the length of expected code
+                const codeLength = expectedCode.length;
+                
+                // Check if barcode is long enough
+                if (barcode.length < 5) {
+                    return false; // Barcode too short to check position 5
                 }
+                
+                // For 1-character codes, check position 5
+                if (codeLength === 1) {
+                    return barcode.charAt(4) === expectedCode;
+                }
+                // For 2-character codes, check positions 5 and 6
+                else if (codeLength === 2) {
+                    return barcode.length >= 6 && 
+                           barcode.charAt(4) === expectedCode.charAt(0) && 
+                           barcode.charAt(5) === expectedCode.charAt(1);
+                }
+                // For 3-character codes, check positions 5, 6, and 7
+                else if (codeLength === 3) {
+                    return barcode.length >= 7 && 
+                           barcode.charAt(4) === expectedCode.charAt(0) && 
+                           barcode.charAt(5) === expectedCode.charAt(1) && 
+                           barcode.charAt(6) === expectedCode.charAt(2);
+                }
+                
+                return false;
             }
+            
+            // Create a new assembly process if none exists
+            // ...existing code...
 
-            // Load the assembly state from the server
-            async function loadAssemblyState() {
-                // First check if there's an assembly ID in the URL
-                const id = getAssemblyId();
-                const workOrderId = getWorkOrderId();
+            // Function to verify barcode - UPDATED WITH NEW CODE VERIFICATION
+            async function verifyBarcode(barcode) {
+                const trimmedBarcode = barcode.trim();
                 
-                if (!id) {
-                    // No assembly ID in URL
-                    if (workOrderId) {
-                        // We have a work order ID, create a new assembly
-                        addLogEntry(`Creating new assembly for work order #${workOrderId}`, 'info');
-                        const newAssembly = await createAssemblyProcess(workOrderId);
-                        if (newAssembly) {
-                            assemblyId = newAssembly.id;
-                            currentSensorIndex = 1;
-                            return true;
-                        } else {
-                            // Failed to create assembly
-                            addLogEntry('Failed to create assembly', 'error');
-                            showNotification('Failed to create assembly. Redirecting...', 'error');
-                            
-                            // Redirect to main assembly page after 2 seconds
-                            setTimeout(() => {
-                                window.location.href = '/assembly';
-                            }, 2000);
-                            
-                            return false;
-                        }
-                    } else {
-                        // No assembly ID and no work order ID
-                        showNotification('Error: No assembly or work order ID provided', 'error');
-                        addLogEntry('No assembly ID or work order ID provided', 'error');
+                // Check if we're scanning components first (PCBs, cables, etc.)
+                if (currentSensorIndex <= 6) {
+                    // We're in component scanning phase (index 1-6)
+                    const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                    const nextComponent = componentsArray.find(comp => !comp.scanned);
+                    
+                    if (!nextComponent) {
+                        // All components scanned, start scanning sensors
+                        currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                        showNotification("All components verified! Start scanning sensors in sequence.", "success");
                         
-                        // Show a modal asking user for work order ID
-                        const workOrderIdInput = prompt('Please enter a work order ID to continue:');
-                        if (workOrderIdInput && !isNaN(parseInt(workOrderIdInput))) {
-                            // Create a new assembly with the provided work order ID
-                            const newAssembly = await createAssemblyProcess(parseInt(workOrderIdInput));
-                            if (newAssembly) {
-                                assemblyId = newAssembly.id;
-                                currentSensorIndex = 1;
-                                return true;
-                            }
+                        // Mark the first sensor as next
+                        if (sensorCells[1]) {
+                            // Clear any existing 'next' markers
+                            document.querySelectorAll('.next').forEach(cell => {
+                                cell.classList.remove('next');
+                            });
+                            sensorCells[1].classList.add('next');
                         }
                         
-                        // Redirect to assembly page after 2 seconds
-                        setTimeout(() => {
-                            window.location.href = '/assembly';
-                        }, 2000);
+                        // Update tooltip
+                        sensorCells[1].setAttribute(
+                            'data-tooltip', 
+                            `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
+                        );
                         
                         return false;
                     }
-                }
-                
-                // We have an assembly ID, load its state
-                assemblyId = id;
-                
-                try {
-                    const response = await fetch(`/api/assembly-process/${id}/`);
-                    if (!response.ok) {
-                        throw new Error('Failed to load assembly state');
-                    }
                     
-                    const data = await response.json();
-                    console.log('Loaded assembly data:', data);
+                    // Get the component type and expected code
+                    const componentType = Object.keys(components).find(key => components[key].index === nextComponent.index);
+                    const expectedCode = componentCodeMap[componentType];
                     
-                    // Set the current sensor index
-                    currentSensorIndex = data.current_sensor_index || 1;
-                    
-                    // Load scanned sensors
-                    if (data.scanned_parts && data.scanned_parts.length > 0) {
-                        scannedSensors = data.scanned_parts.map(part => ({
-                            sensorId: part.sensor_id,
-                            barcode: part.part_code,
-                            timestamp: new Date(part.scan_time),
-                            status: 'success'
-                        }));
+                    // NEW: Verify the code in the specific positions
+                    if (verifyCodePositions(trimmedBarcode, expectedCode)) {
+                        // Success - mark the component as scanned
+                        nextComponent.scanned = true;
+                        nextComponent.element.style.backgroundColor = 'var(--status-success)';
                         
-                        // Update UI to reflect scanned parts
-                        scannedSensors.forEach(sensor => {
-                            if (sensorCells[sensor.sensorId]) {
-                                sensorCells[sensor.sensorId].classList.add('success');
-                            }
+                        // Add to scanned sensors list
+                        const newScan = {
+                            sensorId: `component_${nextComponent.index}`,
+                            barcode: trimmedBarcode,
+                            timestamp: new Date(),
+                            status: 'success',
+                            componentName: nextComponent.name
+                        };
+                        
+                        scannedSensors.push(newScan);
+                        
+                        // Save this scan to the database
+                        await saveCurrentScan({
+                            sensorId: nextComponent.index,
+                            barcode: trimmedBarcode,
                         });
                         
-                        // Mark the next sensor
-                        if (currentSensorIndex <= 24) {
+                        // Add log entry
+                        addLogEntry(`${nextComponent.name} verified successfully: ${trimmedBarcode} (Code: ${expectedCode})`, 'success');
+                        
+                        // Show notification
+                        showNotification(`${nextComponent.name} verified successfully!`, 'success');
+                        
+                        // Check if all components are scanned
+                        const allComponentsScanned = Object.values(components).every(comp => comp.scanned);
+                        
+                        if (allComponentsScanned) {
+                            // All components scanned, start scanning sensors
+                            currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                            
+                            // Update the current sensor index in the database
+                            await updateCurrentSensorIndex();
+                            
+                            // Mark the first sensor as next
+                            if (sensorCells[1]) {
+                                // Clear any existing 'next' markers
+                                document.querySelectorAll('.next').forEach(cell => {
+                                    cell.classList.remove('next');
+                                });
+                                sensorCells[1].classList.add('next');
+                            }
+                            
+                            // Update tooltip to indicate next sensor
+                            sensorCells[1].setAttribute(
+                                'data-tooltip', 
+                                `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
+                            );
+                            
+                            addLogEntry('All components scanned! Now scan sensors in sequence.', 'info');
+                            showNotification('All components verified! Now scan sensors in sequence.', 'success');
+                        } else {
+                            // Find the next component to scan
+                            const nextUpComponent = componentsArray.find(comp => !comp.scanned);
+                            const nextComponentType = Object.keys(components).find(key => components[key].index === nextUpComponent.index);
+                            const nextExpectedCode = componentCodeMap[nextComponentType];
+                            
+                            addLogEntry(`Next scan: ${nextUpComponent.name} (Expected code: ${nextExpectedCode})`, 'info');
+                        }
+                        
+                        // Update progress
+                        updateProgress();
+                        
+                        return true;
+                    } else {
+                        // Error - code in positions doesn't match
+                        addLogEntry(`Error: Expected code ${expectedCode} for ${nextComponent.name}, got incorrect code at positions 5${expectedCode.length > 1 ? `-${4 + expectedCode.length}` : ""}`, 'error');
+                        showNotification(`Wrong code for ${nextComponent.name}! Expected ${expectedCode} at position${expectedCode.length > 1 ? "s" : ""} 5${expectedCode.length > 1 ? `-${4 + expectedCode.length}` : ""}`, 'error');
+                        
+                        // Add visual effect for error
+                        const originalColor = nextComponent.element.style.backgroundColor;
+                        nextComponent.element.style.backgroundColor = 'var(--status-error)';
+                        setTimeout(() => {
+                            nextComponent.element.style.backgroundColor = originalColor;
+                        }, 1000);
+                        
+                        return false;
+                    }
+                } else {
+                    // We're scanning sensors (sensorIndex >= 7)
+                    const sensorIdToCheck = currentSensorIndex - 6; // Convert from sequence index to sensor ID
+                    const expectedCode = sensorCodeMap[sensorIdToCheck];
+                    
+                    // NEW: Verify the barcode at the specific positions
+                    if (verifyCodePositions(trimmedBarcode, expectedCode)) {
+                        // Success - mark the sensor as scanned
+                        sensorCells[sensorIdToCheck].classList.remove('next');
+                        sensorCells[sensorIdToCheck].classList.add('success');
+                        
+                        // Add to scanned sensors list
+                        const newSensor = {
+                            sensorId: sensorIdToCheck,
+                            barcode: trimmedBarcode,
+                            timestamp: new Date(),
+                            status: 'success'
+                        };
+                        
+                        scannedSensors.push(newSensor);
+                        
+                        // Save this scan to the database
+                        await saveCurrentScan({
+                            sensorId: currentSensorIndex, // Use original index for the API
+                            barcode: trimmedBarcode,
+                        });
+                        
+                        // Add log entry
+                        const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                        addLogEntry(`Sensor #${sensorIdToCheck} verified successfully: ${trimmedBarcode}${codeInfo}`, 'success');
+                        
+                        // Show notification
+                        showNotification(`Sensor #${sensorIdToCheck} verified successfully!`, 'success');
+                        
+                        // Move to next sensor
+                        currentSensorIndex++;
+                        
+                        // Update the current sensor index in the database
+                        await updateCurrentSensorIndex();
+                        
+                        // Update progress
+                        updateProgress();
+                        
+                        // Mark next sensor if available
+                        const nextSensorId = currentSensorIndex - 6;
+                        
+                        if (nextSensorId <= 24) {
                             // Clear any existing 'next' markers
                             document.querySelectorAll('.next').forEach(cell => {
                                 cell.classList.remove('next');
                             });
                             
-                            // Mark the current sensor as next
-                            if (sensorCells[currentSensorIndex]) {
-                                sensorCells[currentSensorIndex].classList.add('next');
+                            // Mark the next sensor
+                            if (sensorCells[nextSensorId]) {
+                                sensorCells[nextSensorId].classList.add('next');
+                                
+                                // Get the next expected code
+                                const nextExpectedCode = sensorCodeMap[nextSensorId];
+                                const codeDisplay = nextExpectedCode ? ` (Code: ${nextExpectedCode})` : ' (No code required)';
+                                
+                                // Update tooltip to indicate next sensor
+                                sensorCells[nextSensorId].setAttribute(
+                                    'data-tooltip', 
+                                    `Sensor #${nextSensorId} - Next to scan${codeDisplay}`
+                                );
                             }
                         } else {
-                            // All sensors scanned
+                            // All sensors scanned, show complete button
                             completeButton.classList.remove('hidden');
                             completeButton.disabled = false;
+                            showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
                         }
                         
-                        // Add log entries for loaded parts
-                        addLogEntry('Previous assembly state loaded', 'info');
-                        addLogEntry(`Continuing from Sensor #${currentSensorIndex}`, 'info');
+                        return true;
+                    } else {
+                        // Error - code in positions doesn't match
+                        const errorMessage = expectedCode ? 
+                            `Error: Expected code ${expectedCode} at position${expectedCode.length > 1 ? "s" : ""} 5${expectedCode.length > 1 ? `-${4 + expectedCode.length}` : ""}` :
+                            `Error: Incorrect sensor code for Sensor #${sensorIdToCheck}`;
+                            
+                        addLogEntry(errorMessage, 'error');
+                        showNotification(`Wrong code for Sensor #${sensorIdToCheck}!`, 'error');
                         
-                        // Update progress
-                        updateProgress();
+                        // Add visual effect for error
+                        const currentCell = sensorCells[sensorIdToCheck];
+                        currentCell.classList.add('error');
+                        setTimeout(() => {
+                            currentCell.classList.remove('error');
+                        }, 1000);
+                        
+                        return false;
                     }
-                    
-                    return true;
-                } catch (error) {
-                    console.error('Error loading assembly state:', error);
-                    addLogEntry('Failed to load previous assembly state', 'error');
-                    
-                    // If we have a work order ID, try creating a new assembly
-                    if (workOrderId) {
-                        addLogEntry('Attempting to create a new assembly', 'info');
-                        const newAssembly = await createAssemblyProcess(workOrderId);
-                        if (newAssembly) {
-                            assemblyId = newAssembly.id;
-                            currentSensorIndex = 1;
-                            return true;
-                        }
-                    }
-                    
-                    return false;
-                }
-            }
-
-            // Save a scanned part to the server
-            async function saveCurrentScan(sensor) {
-                const id = getAssemblyId();
-                
-                if (!id) {
-                    showNotification('Error: No assembly ID found', 'error');
-                    
-                    // Try to get work order ID
-                    const workOrderId = getWorkOrderId();
-                    if (!workOrderId) {
-                        // Prompt user for work order ID
-                        const inputWorkOrderId = prompt('Please enter a work order ID to continue:');
-                        if (inputWorkOrderId && !isNaN(parseInt(inputWorkOrderId))) {
-                            const newAssembly = await createAssemblyProcess(parseInt(inputWorkOrderId));
-                            if (newAssembly) {
-                                assemblyId = newAssembly.id;
-                                localStorage.setItem('currentYBSAssemblyId', assemblyId);
-                            } else {
-                                return false;
-                            }
-                        } else {
-                            return false;
-                        }
-                    } else {
-                        // Create assembly with the work order ID from URL
-                        const newAssembly = await createAssemblyProcess(workOrderId);
-                        if (newAssembly) {
-                            assemblyId = newAssembly.id;
-                            localStorage.setItem('currentYBSAssemblyId', assemblyId);
-                        } else {
-                            return false;
-                        }
-                    }
-                } else {
-                    assemblyId = id;
-                }
-                
-                try {
-                    const response = await fetch(`/api/assembly-process/${assemblyId}/add-scanned-part/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            part_code: sensor.barcode,
-                            sensor_id: sensor.sensorId,
-                            operator: 'Current User'
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Failed to save scan: ${errorText}`);
-                    }
-                    
-                    return await response.json();
-                } catch (error) {
-                    console.error('Error saving scan:', error);
-                    showNotification('Warning: Failed to save scan to server', 'warning');
-                    return false;
-                }
-            }
-
-            // Update the current sensor index on the server
-            async function updateCurrentSensorIndex() {
-                if (!assemblyId) {
-                    showNotification('Error: No assembly ID found', 'error');
-                    return;
-                }
-                
-                try {
-                    const response = await fetch(`/api/assembly-process/${assemblyId}/update-sensor-index/`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            current_sensor_index: currentSensorIndex
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Failed to update sensor index');
-                    }
-                    
-                    return await response.json();
-                } catch (error) {
-                    console.error('Error updating sensor index:', error);
-                    return false;
-                }
-            }
-            
-            // Function to verify barcode
-            async function verifyBarcode(barcode) {
-                // Extract the base part of the barcode (first 3 parts)
-                const baseBarcode = barcode.split('-').slice(0, 3).join('-');
-                
-                // Check if this is the expected sensor
-                const expectedBarcode = sensorBarcodes[currentSensorIndex];
-                
-                if (baseBarcode === expectedBarcode) {
-                    // Success - mark the sensor as scanned
-                    sensorCells[currentSensorIndex].classList.remove('next');
-                    sensorCells[currentSensorIndex].classList.add('success');
-                    
-                    // Add to scanned sensors list
-                    const newSensor = {
-                        sensorId: currentSensorIndex,
-                        barcode: barcode,
-                        timestamp: new Date(),
-                        status: 'success'
-                    };
-                    
-                    scannedSensors.push(newSensor);
-                    
-                    // Save this scan to the database
-                    await saveCurrentScan(newSensor);
-                    
-                    // Add log entry
-                    addLogEntry(`Sensor #${currentSensorIndex} verified successfully: ${barcode}`, 'success');
-                    
-                    // Show notification
-                    showNotification(`Sensor #${currentSensorIndex} verified successfully!`, 'success');
-                    
-                    // Move to next sensor
-                    currentSensorIndex++;
-                    
-                    // Update the current sensor index in the database
-                    await updateCurrentSensorIndex();
-                    
-                    // Update progress
-                    updateProgress();
-                    
-                    // Mark next sensor if available
-                    if (currentSensorIndex <= 24) {
-                        sensorCells[currentSensorIndex].classList.add('next');
-                        // Update tooltip to indicate next sensor
-                        sensorCells[currentSensorIndex].setAttribute(
-                            'data-tooltip', 
-                            `Sensor #${currentSensorIndex} - Next to scan`
-                        );
-                    } else {
-                        // All sensors scanned, show complete button
-                        completeButton.classList.remove('hidden');
-                        completeButton.disabled = false;
-                        showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
-                    }
-                    
-                    return true;
-                } else {
-                    // Error - wrong barcode
-                    addLogEntry(`Error: Expected ${expectedBarcode}, got ${barcode}`, 'error');
-                    showNotification(`Wrong sensor scanned! Expected sensor #${currentSensorIndex}`, 'error');
-                    
-                    // Add visual effect for error
-                    const currentCell = sensorCells[currentSensorIndex];
-                    currentCell.classList.add('error');
-                    setTimeout(() => {
-                        currentCell.classList.remove('error');
-                    }, 1000);
-                    
-                    return false;
                 }
             }
             
             // Function to update progress bar
-            function updateProgress() {
-                const totalSensors = 24;
-                const scannedCount = scannedSensors.length;
-                const progressPercent = Math.round((scannedCount / totalSensors) * 100);
-                
-                progressFill.style.width = `${progressPercent}%`;
-                progressPercentage.textContent = `${progressPercent}%`;
-            }
+            // ...existing code...
             
-            // Function to add log entry
-            function addLogEntry(message, type = 'info') {
-                const timestamp = new Date().toLocaleTimeString();
-                const logItem = document.createElement('div');
-                logItem.classList.add('log-item', type);
-                logItem.innerHTML = `
-                    <span class="log-time">${timestamp}</span>
-                    <span class="log-message">${message}</span>
-                `;
-                logsContent.appendChild(logItem);
-                logsContent.scrollTop = logsContent.scrollHeight;
-            }
-            
-            // Function to show notification
-            function showNotification(message, type = 'info') {
-                const notification = document.getElementById('notification');
-                notification.textContent = message;
-                notification.className = 'notification';
-                notification.classList.add(type);
-                notification.style.display = 'block';
-                
-                setTimeout(() => {
-                    notification.style.opacity = '1';
-                }, 10);
-                
-                setTimeout(() => {
-                    notification.style.opacity = '0';
-                    setTimeout(() => {
-                        notification.style.display = 'none';
-                    }, 300);
-                }, 3000);
-            }
-            
-            // Event listeners
-            scanButton.addEventListener('click', function() {
-                const barcode = barcodeInput.value.trim();
-                if (barcode) {
-                    verifyBarcode(barcode);
-                    barcodeInput.value = '';
-                } else {
-                    showNotification('Please enter a barcode', 'error');
-                }
-                barcodeInput.focus();
-            });
-            
-            barcodeInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    const barcode = barcodeInput.value.trim();
-                    if (barcode) {
-                        verifyBarcode(barcode);
-                        barcodeInput.value = '';
-                    } else {
-                        showNotification('Please enter a barcode', 'error');
-                    }
-                }
-            });
-            
-            // When complete button is clicked
-            completeButton.addEventListener('click', function() {
-                completeButton.disabled = true;
-                
-                const id = getAssemblyId();
-                if (!id) {
-                    showNotification('Error: No assembly ID found', 'error');
-                    completeButton.disabled = false;
-                    return;
-                }
-                
-                assemblyId = id; // Ensure assemblyId is set correctly
-                
-                // Prepare data for submission
-                const assemblyData = {
-                    operator: 'Current User',
-                    notes: 'Assembly completed via YBS assembly interface',
-                    scanned_parts: scannedSensors.map(sensor => ({
-                        sensorId: sensor.sensorId,
-                        part_code: sensor.barcode
-                    }))
-                };
-                
-                // Show processing message
-                showNotification('Processing...', 'info');
-                addLogEntry('Completing assembly process...', 'info');
-                
-                // Send the data to the server
-                fetch(`/api/assembly-process/${assemblyId}/complete/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(assemblyData)
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Success - show notification
-                    showNotification('Assembly completed successfully! Data has been saved.', 'success');
-                    addLogEntry('Assembly completed and verified. Data saved to database.', 'success');
-                    
-                    // Update button text
-                    setTimeout(() => {
-                        completeButton.textContent = 'Assembly Completed ✓';
-                        
-                        // If this was part of a multi-unit work order, show a message
-                        if (data.next_unit) {
-                            showNotification(`This work order has multiple units. Please continue with the next assembly: Serial #${data.next_unit.serial_number}`, 'info');
-                            
-                            // Offer to start the next assembly after a delay
-                            setTimeout(() => {
-                                if (confirm('Would you like to continue with the next assembly?')) {
-                                    // Navigate to the new assembly
-                                    window.location.href = `?id=${data.next_unit.id}`;
-                                } else {
-                                    // Navigate back to the assembly manager
-                                    window.location.href = '/assembly/ysb';
-                                }
-                            }, 2000);
-                        } else {
-                            // Work order is complete
-                            setTimeout(() => {
-                                showNotification('All assemblies for this work order are complete!', 'success');
-                                window.location.href = '/assembly/ysb';
-                            }, 3000);
-                        }
-                    }, 1000);
-                    
-                    // Clear localStorage on completion
-                    localStorage.removeItem('currentYBSAssemblyId');
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showNotification('Failed to save assembly data. Please try again.', 'error');
-                    addLogEntry('Error saving assembly data to the server.', 'error');
-                    completeButton.disabled = false;
-                });
-            });
-            
-            // Initialize the page - load previous state or start fresh
-            loadAssemblyState().then(loaded => {
-                if (!loaded) {
-                    addLogEntry('Starting new assembly. Please scan components in the following order:', 'info');
-                    addLogEntry('1. Left Slave PCB, 2. Master PCB, 3. Right Slave PCB', 'info');
-                    addLogEntry('4. Board-to-Board (Left-Master), 5. Board-to-Board (Master-Right)', 'info');
-                    addLogEntry('6. P&C Cable, 7-30. All 24 sensors in sequence', 'info');
-                }
-                // Focus the barcode input
-                barcodeInput.focus();
-            });
-
-            // Updated component and sensor barcodes for YBS Machine - Duct Number 41
+            // Component definitions for YBS Machine - Duct Number 41
             const components = {
                 // PCBs
                 "left_pcb": {
@@ -2423,382 +2796,166 @@
                 }
             };
             
-            // Updated sensor barcodes are already defined above
+            // Function to add log entry
+            function addLogEntry(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logItem = document.createElement('div');
+                logItem.classList.add('log-entry', type);
+                logItem.innerHTML = `
+                    <span class="log-time">${timestamp}</span>
+                    <span class="log-message">${message}</span>
+                `;
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            }
             
-            // Update the verifyBarcode function to handle the new assembly sequence
-            async function verifyBarcode(barcode) {
-                const trimmedBarcode = barcode.trim();
+            // Function to show notification
+            function showNotification(message, type = 'info') {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = 'notification';
+                notification.classList.add(type);
+                notification.style.display = 'block';
                 
-                // Check if we're scanning components first (PCBs, cables, etc.)
-                if (currentSensorIndex === 1) {
-                    // We should be scanning components in sequence
+                setTimeout(() => {
+                    notification.style.opacity = '1';
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    setTimeout(() => {
+                        notification.style.display = 'none';
+                    }, 300);
+                }, 3000);
+            }
+            
+            // Update the highlightNextItem function to display code information
+            async function highlightNextItem() {
+                // Clear any existing highlights
+                document.querySelectorAll('.next').forEach(el => el.classList.remove('next'));
+                
+                if (currentSensorIndex <= 6) {
+                    // We're in the component scanning phase
                     const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
                     const nextComponent = componentsArray.find(comp => !comp.scanned);
                     
-                    if (!nextComponent) {
-                        // All components scanned, start scanning sensors
-                        currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
-                        showNotification("All components verified! Start scanning sensors in sequence.", "success");
+                    if (nextComponent) {
+                        // Highlight the next component
+                        if (nextComponent.element) {
+                            nextComponent.element.classList.add('next');
+                        }
+                        
+                        // Get the component type and expected code
+                        const componentType = Object.keys(components).find(key => components[key].index === nextComponent.index);
+                        const expectedCode = componentCodeMap[componentType];
+                        
+                        addLogEntry(`Next scan: ${nextComponent.name} (Expected code: ${expectedCode})`, 'info');
+                        showNotification(`Please scan ${nextComponent.name}`, 'info');
+                    } else {
+                        // All components scanned, move to sensors
+                        currentSensorIndex = 7;
                         
                         // Mark the first sensor as next
                         if (sensorCells[1]) {
-                            // Clear any existing 'next' markers
-                            document.querySelectorAll('.next').forEach(cell => {
-                                cell.classList.remove('next');
-                            });
                             sensorCells[1].classList.add('next');
+                            
+                            const expectedCode = sensorCodeMap[1];
+                            const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                            sensorCells[1].setAttribute('data-tooltip', `Sensor #1 - Next to scan${codeInfo}`);
                         }
                         
-                        // Update tooltip to indicate next sensor
-                        sensorCells[1].setAttribute(
-                            'data-tooltip', 
-                            `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
-                        );
-                        
-                        return false;
+                        addLogEntry('All components scanned. Please start scanning sensors.', 'info');
+                        showNotification('All components scanned. Please start scanning sensors.', 'info');
                     }
+                } else if (currentSensorIndex <= 30) {
+                    // We're in the sensor scanning phase
+                    const sensorId = currentSensorIndex - 6;
                     
-                    // Check if the scanned barcode matches the next component
-                    if (trimmedBarcode === nextComponent.barcode) {
-                        // Success - mark the component as scanned
-                        nextComponent.scanned = true;
-                        nextComponent.element.style.backgroundColor = 'var(--status-success)';
-                        
-                        // Add to scanned sensors list
-                        const newScan = {
-                            sensorId: `component_${nextComponent.index}`,
-                            barcode: trimmedBarcode,
-                            timestamp: new Date(),
-                            status: 'success',
-                            componentName: nextComponent.name
-                        };
-                        
-                        scannedSensors.push(newScan);
-                        
-                        // Save this scan to the database
-                        await saveCurrentScan({
-                            sensorId: nextComponent.index,
-                            barcode: trimmedBarcode,
-                        });
-                        
-                        // Add log entry
-                        addLogEntry(`${nextComponent.name} verified successfully: ${trimmedBarcode}`, 'success');
-                        
-                        // Show notification
-                        showNotification(`${nextComponent.name} verified successfully!`, 'success');
-                        
-                        // Check if all components are scanned
-                        const allComponentsScanned = Object.values(components).every(comp => comp.scanned);
-                        
-                        if (allComponentsScanned) {
-                            // All components scanned, start scanning sensors
-                            currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                    if (sensorId <= 24) {
+                        // Highlight the next sensor
+                        if (sensorCells[sensorId]) {
+                            sensorCells[sensorId].classList.add('next');
                             
-                            // Update the current sensor index in the database
-                            await updateCurrentSensorIndex();
+                            // Get the expected code
+                            const expectedCode = sensorCodeMap[sensorId];
+                            const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
                             
-                            // Mark the first sensor as next
-                            if (sensorCells[1]) {
-                                // Clear any existing 'next' markers
-                                document.querySelectorAll('.next').forEach(cell => {
-                                    cell.classList.remove('next');
-                                });
-                                sensorCells[1].classList.add('next');
-                            }
-                            
-                            // Update tooltip to indicate next sensor
-                            sensorCells[1].setAttribute(
-                                'data-tooltip', 
-                                `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`
-                            );
-                            
-                            addLogEntry('All components scanned! Now scan sensors in sequence.', 'info');
-                            showNotification('All components verified! Now scan sensors in sequence.', 'success');
-                        } else {
-                            // Find the next component to scan
-                            const nextUpComponent = componentsArray.find(comp => !comp.scanned);
-                            addLogEntry(`Next scan: ${nextUpComponent.name} (${nextUpComponent.barcode})`, 'info');
+                            sensorCells[sensorId].setAttribute('data-tooltip', `Sensor #${sensorId} - Next to scan${codeInfo}`);
                         }
                         
-                        // Update progress
-                        updateProgress();
-                        
-                        return true;
+                        const expectedCode = sensorCodeMap[sensorId];
+                        const codeInfo = expectedCode ? ` (Code: ${expectedCode})` : ' (No code required)';
+                        addLogEntry(`Next scan: Sensor #${sensorId}${codeInfo}`, 'info');
+                        showNotification(`Please scan Sensor #${sensorId}`, 'info');
                     } else {
-                        // Error - wrong barcode
-                        addLogEntry(`Error: Expected ${nextComponent.name} (${nextComponent.barcode}), got ${trimmedBarcode}`, 'error');
-                        showNotification(`Wrong component scanned! Expected ${nextComponent.name}`, 'error');
+                        // All sensors scanned
+                        completeButton.classList.remove('hidden');
+                        completeButton.disabled = false;
                         
-                        // Add visual effect for error
-                        const originalColor = nextComponent.element.style.backgroundColor;
-                        nextComponent.element.style.backgroundColor = 'var(--status-error)';
-                        setTimeout(() => {
-                            nextComponent.element.style.backgroundColor = originalColor;
-                        }, 1000);
-                        
-                        return false;
+                        addLogEntry('All sensors scanned. Please complete the assembly.', 'success');
+                        showNotification('All sensors scanned! Click Complete to finish assembly.', 'success');
                     }
                 } else {
-                    // We're scanning sensors (sensorIndex >= 7)
-                    const sensorIdToCheck = currentSensorIndex - 6; // Convert from sequence index to sensor ID
+                    // All items scanned
+                    completeButton.classList.remove('hidden');
+                    completeButton.disabled = false;
                     
-                    // Check if this is the expected sensor
-                    const expectedBarcode = sensorBarcodes[sensorIdToCheck];
-                    
-                    if (trimmedBarcode === expectedBarcode) {
-                        // Success - mark the sensor as scanned
-                        sensorCells[sensorIdToCheck].classList.remove('next');
-                        sensorCells[sensorIdToCheck].classList.add('success');
-                        
-                        // Add to scanned sensors list
-                        const newSensor = {
-                            sensorId: sensorIdToCheck,
-                            barcode: trimmedBarcode,
-                            timestamp: new Date(),
-                            status: 'success'
-                        };
-                        
-                        scannedSensors.push(newSensor);
-                        
-                        // Save this scan to the database
-                        await saveCurrentScan({
-                            sensorId: currentSensorIndex, // Use original index for the API
-                            barcode: trimmedBarcode,
-                        });
-                        
-                        // Add log entry
-                        addLogEntry(`Sensor #${sensorIdToCheck} verified successfully: ${trimmedBarcode}`, 'success');
-                        
-                        // Show notification
-                        showNotification(`Sensor #${sensorIdToCheck} verified successfully!`, 'success');
-                        
-                        // Move to next sensor
-                        currentSensorIndex++;
-                        
-                        // Update the current sensor index in the database
-                        await updateCurrentSensorIndex();
-                        
-                        // Update progress
-                        updateProgress();
-                        
-                        // Mark next sensor if available
-                        const nextSensorId = currentSensorIndex - 6;
-                        
-                        if (nextSensorId <= 24) {
-                            // Clear any existing 'next' markers
-                            document.querySelectorAll('.next').forEach(cell => {
-                                cell.classList.remove('next');
-                            });
-                            
-                            // Mark the next sensor
-                            if (sensorCells[nextSensorId]) {
-                                sensorCells[nextSensorId].classList.add('next');
-                                
-                                // Update tooltip to indicate next sensor
-                                sensorCells[nextSensorId].setAttribute(
-                                    'data-tooltip', 
-                                    `Sensor #${nextSensorId} - Next to scan: ${sensorBarcodes[nextSensorId]}`
-                                );
-                            }
-                        } else {
-                            // All sensors scanned, show complete button
-                            completeButton.classList.remove('hidden');
-                            completeButton.disabled = false;
-                            showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
-                        }
-                        
-                        return true;
-                    } else {
-                        // Error - wrong barcode
-                        addLogEntry(`Error: Expected Sensor #${sensorIdToCheck} (${expectedBarcode}), got ${trimmedBarcode}`, 'error');
-                        showNotification(`Wrong sensor scanned! Expected Sensor #${sensorIdToCheck}`, 'error');
-                        
-                        // Add visual effect for error
-                        const currentCell = sensorCells[sensorIdToCheck];
-                        currentCell.classList.add('error');
-                        setTimeout(() => {
-                            currentCell.classList.remove('error');
-                        }, 1000);
-                        
-                        return false;
-                    }
-                }
-            }
-            
-            // Override the existing updateProgress function to handle the new sequence
-            function updateProgress() {
-                const totalItems = 30; // 6 components + 24 sensors
-                let scannedCount = scannedSensors.length;
-                
-                // Ensure we don't exceed 100%
-                if (scannedCount > totalItems) scannedCount = totalItems;
-                
-                const progressPercent = Math.round((scannedCount / totalItems) * 100);
-                
-                progressFill.style.width = `${progressPercent}%`;
-                progressPercentage.textContent = `${progressPercent}%`;
-            }
-            
-            // Add support for loading prior component scans when reloading the page
-            async function loadAssemblyState() {
-                // First check if there's an assembly ID in the URL
-                const id = getAssemblyId();
-                const workOrderId = getWorkOrderId();
-                
-                if (!id) {
-                    // No assembly ID in URL - handle as before
-                    if (workOrderId && !creationAttempted) {
-                        creationAttempted = true;
-                        addLogEntry(`Creating new assembly for work order #${workOrderId}`, 'info');
-                        const newAssembly = await createAssemblyProcess(workOrderId);
-                        if (newAssembly) {
-                            assemblyId = newAssembly.id;
-                            currentSensorIndex = 1; // Start with components
-                            return true;
-                        } else {
-                            // Failed to create assembly
-                            addLogEntry('Failed to create assembly', 'error');
-                            showNotification('Failed to create assembly. Please return to work orders page.', 'error');
-                            
-                            // Show a simple interface to get back
-                            document.getElementById('mainContainer').innerHTML = `
-                                <div style="text-align: center; padding: 2rem;">
-                                    <h2 style="color: #dc2626; margin-bottom: 1rem;">Assembly Creation Failed</h2>
-                                    <p>Unable to create assembly. The work order may not exist or there might be a server issue.</p>
-                                    <button onclick="window.location.href='/assembly'" 
-                                            style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
-                                                   border: none; border-radius: 0.375rem; margin-top: 1rem; 
-                                                   cursor: pointer;">
-                                        Return to Assembly Page
-                                    </button>
-                                </div>
-                            `;
-                            return false;
-                        }
-                    } else if (!creationAttempted) {
-                        // Handle as before - try to get available work orders
-                        // ...existing code...
-                    } else {
-                        return false;
-                    }
+                    addLogEntry('All items scanned. Please complete the assembly.', 'success');
+                    showNotification('All items scanned! Click Complete to finish assembly.', 'success');
                 }
                 
-                // We have an assembly ID, load its state
-                assemblyId = id;
+                // Save current index to localStorage
+                localStorage.setItem('currentSensorIndex', currentSensorIndex.toString());
                 
+                // Also update on server if possible
                 try {
-                    const response = await fetch(`/api/assembly-process/${id}/`);
-                    if (!response.ok) {
-                        throw new Error('Failed to load assembly state');
-                    }
-                    
-                    const data = await response.json();
-                    console.log('Loaded assembly data:', data);
-                    
-                    // Set the current sensor index
-                    currentSensorIndex = data.current_sensor_index || 1;
-                    
-                    // Load scanned parts
-                    if (data.scanned_parts && data.scanned_parts.length > 0) {
-                        scannedSensors = data.scanned_parts.map(part => ({
-                            sensorId: part.sensor_id,
-                            barcode: part.part_code,
-                            timestamp: new Date(part.scan_time),
-                            status: 'success'
-                        }));
-                        
-                        // Process each scanned part
-                        scannedSensors.forEach(scan => {
-                            // Check if this is a component (1-6) or a sensor (7-30)
-                            if (scan.sensorId <= 6) {
-                                // This is a component scan - find the component and mark it as scanned
-                                const component = Object.values(components).find(c => c.index === scan.sensorId);
-                                if (component) {
-                                    component.scanned = true;
-                                    component.element.style.backgroundColor = 'var(--status-success)';
-                                }
-                            } else {
-                                // This is a sensor scan - find the sensor and mark it as success
-                                const sensorId = scan.sensorId - 6; // Convert from sequence index to sensor ID
-                                if (sensorCells[sensorId]) {
-                                    sensorCells[sensorId].classList.add('success');
-                                }
-                            }
-                        });
-                        
-                        // Mark the next item to scan
-                        if (currentSensorIndex <= 6) {
-                            // We're still scanning components
-                            const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
-                            const nextComponent = componentsArray.find(comp => !comp.scanned);
-                            
-                            if (nextComponent) {
-                                addLogEntry(`Next scan: ${nextComponent.name} (${nextComponent.barcode})`, 'info');
-                            } else {
-                                // All components scanned, move to sensors
-                                currentSensorIndex = 7;
-                                
-                                // Mark the first sensor as next
-                                if (sensorCells[1]) {
-                                    // Clear any existing 'next' markers
-                                    document.querySelectorAll('.next').forEach(cell => {
-                                        cell.classList.remove('next');
-                                    });
-                                    sensorCells[1].classList.add('next');
-                                }
-                            }
-                        } else if (currentSensorIndex <= 30) {
-                            // We're scanning sensors
-                            const sensorId = currentSensorIndex - 6;
-                            
-                            // Clear any existing 'next' markers
-                            document.querySelectorAll('.next').forEach(cell => {
-                                cell.classList.remove('next');
-                            });
-                            
-                            // Mark the current sensor as next if it exists
-                            if (sensorCells[sensorId]) {
-                                sensorCells[sensorId].classList.add('next');
-                            }
-                        } else {
-                            // All items scanned
-                            completeButton.classList.remove('hidden');
-                            completeButton.disabled = false;
-                        }
-                        
-                        // Add log entries for loaded parts
-                        addLogEntry('Previous assembly state loaded', 'info');
-                        
-                        // Show next step message based on current index
-                        if (currentSensorIndex <= 6) {
-                            const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
-                            const nextComponent = componentsArray.find(comp => !comp.scanned);
-                            if (nextComponent) {
-                                addLogEntry(`Continuing with component: ${nextComponent.name}`, 'info');
-                            } else {
-                                addLogEntry('All components scanned. Continue with sensors.', 'info');
-                            }
-                        } else if (currentSensorIndex <= 30) {
-                            const sensorId = currentSensorIndex - 6;
-                            addLogEntry(`Continuing from Sensor #${sensorId}`, 'info');
-                        } else {
-                            addLogEntry('All items scanned. Complete the assembly.', 'info');
-                        }
-                        
-                        // Update progress
-                        updateProgress();
-                    }
-                    
-                    return true;
+                    await updateCurrentSensorIndex();
                 } catch (error) {
-                    console.error('Error loading assembly state:', error);
-                    addLogEntry('Failed to load previous assembly state', 'error');
-                    
-                    // Show error but don't try to create a new assembly automatically
-                    showNotification('Error loading assembly. Please return to work orders page.', 'error');
-                    return false;
+                    console.warn('Failed to update server with current index, using localStorage backup');
                 }
             }
+            
+            // Event listeners
+            scanButton.addEventListener('click', function() {
+                const barcode = barcodeInput.value.trim();
+                if (barcode) {
+                    verifyBarcode(barcode);
+                    barcodeInput.value = '';
+                } else {
+                    showNotification('Please enter a barcode', 'error');
+                }
+                barcodeInput.focus();
+            });
+            
+            barcodeInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const barcode = barcodeInput.value.trim();
+                    if (barcode) {
+                        verifyBarcode(barcode);
+                        barcodeInput.value = '';
+                    } else {
+                        showNotification('Please enter a barcode', 'error');
+                    }
+                }
+            });
+            
+            // Initialize the page - load previous state or start fresh
+            loadAssemblyState().then(loaded => {
+                if (!loaded) {
+                    addLogEntry('Starting new assembly. Please scan components in the following order:', 'info');
+                    
+                    // Display component codes in the log
+                    Object.keys(components).forEach(key => {
+                        const component = components[key];
+                        const expectedCode = componentCodeMap[key];
+                        addLogEntry(`${component.index}. ${component.name} - Code: ${expectedCode}`, 'info');
+                    });
+                    
+                    addLogEntry('After components, scan all 24 sensors in sequence', 'info');
+                }
+                // Focus the barcode input
+                barcodeInput.focus();
+            });
         });
     </script>
 </body>

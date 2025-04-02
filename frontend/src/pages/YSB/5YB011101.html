@@ -868,12 +868,76 @@
                     index: 6
                 }
             };
+            
+            // NEW: Component code mapping - specific code validation for each component
+            const componentCodeMap = {
+                // Components
+                "left_pcb": "24",         // Left slave - code "24" (2 in 5th position, 4 in 6th)
+                "master_pcb": "25",       // Master - code "25" (2 in 5th position, 5 in 6th)
+                "right_pcb": "3Q4",       // Right PCB - code "3Q4" (3 in 5th, Q in 6th, 4 in 7th)
+                "b2b_left_master": "O",   // B2B (left-master) - code "O" (O in 5th position)
+                "b2b_master_right": "P",  // B2B (master-right) - code "P" (P in 5th position)
+                "pc_cable": "J",          // P&C cable - code "J" (J in 5th position)
+            };
+
+            // NEW: Sensor code mapping - individual codes for each sensor
+            const sensorCodeMap = {
+                1: "1",    // Sensor 1: code "1"
+                2: "1",    // Sensor 2: code "1"
+                3: "1",    // Sensor 3: code "1"
+                4: "1",    // Sensor 4: code "1"
+                5: "1",    // Sensor 5: code "1"
+                6: "1",    // Sensor 6: code "1"
+                7: "1",    // Sensor 7: code "1"
+                8: "1",    // Sensor 8: code "1"
+                9: "1",    // Sensor 9: code "1"
+                10: "1",   // Sensor 10: code "1"
+                11: "1",   // Sensor 11: code "1"
+                12: "1",   // Sensor 12: code "1"
+                13: "2",   // Sensor 13: code "2"
+                14: "2",   // Sensor 14: code "2"
+                15: "2",   // Sensor 15: code "2"
+                16: "2",   // Sensor 16: code "2"
+                17: "2",   // Sensor 17: code "2"
+                18: "2",   // Sensor 18: code "2"
+                19: "2",   // Sensor 19: code "2"
+                20: "2",   // Sensor 20: code "2"
+                21: "2",   // Sensor 21: code "2"
+                22: "2",   // Sensor 22: code "2"
+                23: "",    // Sensor 23: no code (automatically passes)
+                24: "",    // Sensor 24: no code (automatically passes)
+                25: ""     // Sensor 25: no code (automatically passes)
+            };
 
             // Initialize variables
             let currentSensorIndex = 1;
             let scannedSensors = [];
             let assemblyId = null; // Store the assembly ID
             let creationAttempted = false; // Flag to prevent multiple creation attempts
+            let currentlyScanningType = 'components'; // 'components' or 'sensors'
+            
+            // NEW: Set the title text to show what we're currently scanning
+            function updateScanningTitle() {
+                const boardToBoard = document.querySelector('.board-to-board-title');
+                if (boardToBoard) {
+                    if (currentlyScanningType === 'components') {
+                        let nextComponentToScan = 'Components';
+                        const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                        const nextComponent = componentsArray.find(comp => !comp.scanned);
+                        if (nextComponent) {
+                            nextComponentToScan = nextComponent.name;
+                        }
+                        boardToBoard.textContent = `Scanning: ${nextComponentToScan}`;
+                    } else {
+                        const sensorId = currentSensorIndex - 6;
+                        if (sensorId <= 25) {
+                            boardToBoard.textContent = `Scanning: Sensor #${sensorId}`;
+                        } else {
+                            boardToBoard.textContent = 'Assembly Complete';
+                        }
+                    }
+                }
+            }
 
             // Get elements
             const barcodeInput = document.getElementById('barcodeInput');
@@ -896,106 +960,26 @@
 
             // Mark the first sensor as next by default
             sensorCells[1].classList.add('next');
-
-            // Get assembly ID from URL parameters
-            function getAssemblyId() {
-                // First try from URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const id = urlParams.get('id');
-                
-                if (id) {
-                    // If found in URL, also save to localStorage for persistence
-                    localStorage.setItem('currentYBSAssemblyId', id);
-                    return id;
+            
+            // NEW: Function to validate a barcode against expected code pattern
+            function validateCode(barcode, expectedCode) {
+                if (!expectedCode || expectedCode === "") {
+                    // If no code is expected, always pass (for sensors 23-25)
+                    return true;
                 }
                 
-                // Fallback to localStorage if not in URL
-                return localStorage.getItem('currentYBSAssemblyId');
-            }
-            
-            // Get work order ID from URL parameters (for new assembly creation)
-            function getWorkOrderId() {
-                const urlParams = new URLSearchParams(window.location.search);
-                return urlParams.get('workOrderId');
-            }
-
-            // Helper to add visual interaction effects
-            function setupInteractionEffects() {
-                const cells = document.querySelectorAll('.cell');
-                const tooltip = document.getElementById('tooltip');
-                
-                cells.forEach(cell => {
-                    cell.addEventListener('mouseenter', function(e) {
-                        const tooltipText = this.getAttribute('data-tooltip');
-                        if (tooltipText) {
-                            tooltip.textContent = tooltipText;
-                            tooltip.classList.add('show');
-                            
-                            const rect = this.getBoundingClientRect();
-                            const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
-                            
-                            tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
-                            tooltip.style.top = rect.bottom + 10 + 'px';
-                            
-                            if (parseFloat(tooltip.style.left) < tableRect.left) {
-                                tooltip.style.left = tableRect.left + 'px';
-                            } else if (parseFloat(tooltip.style.left) + tooltip.offsetWidth > tableRect.right) {
-                                tooltip.style.left = tableRect.right - tooltip.offsetWidth + 'px';
-                            }
-                        }
-                    });
+                // Get the positions we need to check
+                for (let i = 0; i < expectedCode.length; i++) {
+                    // Check 5th, 6th, 7th positions based on expected code length
+                    const position = 4 + i; // 0-based index, so 5th position is index 4
                     
-                    cell.addEventListener('mouseleave', function() {
-                        tooltip.classList.remove('show');
-                    });
-                });
-            }
-
-            // Function to show notification
-            function showNotification(message, type = 'info') {
-                const notification = document.getElementById('notification');
-                notification.textContent = message;
-                notification.className = 'notification';
-                notification.classList.add(type);
-                notification.style.display = 'block';
+                    // Make sure barcode is long enough and the character matches
+                    if (barcode.length <= position || barcode[position] !== expectedCode[i]) {
+                        return false;
+                    }
+                }
                 
-                setTimeout(() => {
-                    notification.style.opacity = '1';
-                }, 10);
-                
-                setTimeout(() => {
-                    notification.style.opacity = '0';
-                    setTimeout(() => {
-                        notification.style.display = 'none';
-                    }, 300);
-                }, 3000);
-            }
-            
-            // Function to add log entry
-            function addLogEntry(message, type = 'info') {
-                const timestamp = new Date().toLocaleTimeString();
-                const logItem = document.createElement('div');
-                logItem.classList.add('log-item', type);
-                logItem.innerHTML = `
-                    <span class="log-time">${timestamp}</span>
-                    <span class="log-message">${message}</span>
-                `;
-                logsContent.appendChild(logItem);
-                logsContent.scrollTop = logsContent.scrollHeight;
-            }
-
-            // Function to update progress bar
-            function updateProgress() {
-                const totalItems = 31; // 6 components + 25 sensors
-                let scannedCount = scannedSensors.length;
-                
-                // Ensure we don't exceed 100%
-                if (scannedCount > totalItems) scannedCount = totalItems;
-                
-                const progressPercent = Math.round((scannedCount / totalItems) * 100);
-                
-                progressFill.style.width = `${progressPercent}%`;
-                progressPercentage.textContent = `${progressPercent}%`;
+                return true;
             }
 
             // Function to verify barcode
@@ -1004,6 +988,9 @@
                 
                 // Check if we're scanning components first (PCBs, cables, etc.)
                 if (currentSensorIndex === 1) {
+                    currentlyScanningType = 'components';
+                    updateScanningTitle();
+                    
                     // We should be scanning components in sequence
                     const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
                     const nextComponent = componentsArray.find(comp => !comp.scanned);
@@ -1011,6 +998,9 @@
                     if (!nextComponent) {
                         // All components scanned, start scanning sensors
                         currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                        currentlyScanningType = 'sensors';
+                        updateScanningTitle();
+                        
                         showNotification("All components verified! Start scanning sensors in sequence.", "success");
                         
                         // Mark the first sensor as next
@@ -1034,8 +1024,12 @@
                         return false;
                     }
                     
-                    // Check if the scanned barcode matches the next component
-                    if (trimmedBarcode === nextComponent.barcode) {
+                    // Get the expected code for this component
+                    const componentKey = Object.keys(components).find(key => components[key] === nextComponent);
+                    const expectedCode = componentCodeMap[componentKey];
+                    
+                    // NEW: Validate barcode using the code pattern instead of exact match
+                    if (validateCode(trimmedBarcode, expectedCode)) {
                         // Success - mark the component as scanned
                         nextComponent.scanned = true;
                         nextComponent.element.style.backgroundColor = 'var(--status-success)';
@@ -1069,6 +1063,8 @@
                         if (allComponentsScanned) {
                             // All components scanned, start scanning sensors
                             currentSensorIndex = 7; // Start at sensor index 7 (1st sensor)
+                            currentlyScanningType = 'sensors';
+                            updateScanningTitle();
                             
                             // Update the current sensor index in the database
                             await updateCurrentSensorIndex();
@@ -1093,7 +1089,11 @@
                         } else {
                             // Find the next component to scan
                             const nextUpComponent = componentsArray.find(comp => !comp.scanned);
-                            addLogEntry(`Next scan: ${nextUpComponent.name} (${nextUpComponent.barcode})`, 'info');
+                            const nextComponentKey = Object.keys(components).find(key => components[key] === nextUpComponent);
+                            const nextExpectedCode = componentCodeMap[nextComponentKey];
+                            
+                            addLogEntry(`Next scan: ${nextUpComponent.name} (Code: ${nextExpectedCode})`, 'info');
+                            updateScanningTitle();
                         }
                         
                         // Update progress
@@ -1102,8 +1102,11 @@
                         return true;
                     } else {
                         // Error - wrong barcode
-                        addLogEntry(`Error: Expected ${nextComponent.name} (${nextComponent.barcode}), got ${trimmedBarcode}`, 'error');
-                        showNotification(`Wrong component scanned! Expected ${nextComponent.name}`, 'error');
+                        const componentKey = Object.keys(components).find(key => components[key] === nextComponent);
+                        const expectedCode = componentCodeMap[componentKey];
+                        
+                        addLogEntry(`Error: Expected ${nextComponent.name} (Code: ${expectedCode}), got ${trimmedBarcode}`, 'error');
+                        showNotification(`Wrong component scanned! Expected ${nextComponent.name} with code ${expectedCode}`, 'error');
                         
                         // Add visual effect for error
                         const originalColor = nextComponent.element.style.backgroundColor;
@@ -1116,12 +1119,16 @@
                     }
                 } else {
                     // We're scanning sensors (sensorIndex >= 7)
+                    currentlyScanningType = 'sensors';
+                    updateScanningTitle();
+                    
                     const sensorIdToCheck = currentSensorIndex - 6; // Convert from sequence index to sensor ID
                     
-                    // Check if this is the expected sensor
-                    const expectedBarcode = sensorBarcodes[sensorIdToCheck];
+                    // Get the expected code for this sensor
+                    const expectedCode = sensorCodeMap[sensorIdToCheck];
                     
-                    if (trimmedBarcode === expectedBarcode) {
+                    // NEW: Validate sensor using code pattern
+                    if (validateCode(trimmedBarcode, expectedCode)) {
                         // Success - mark the sensor as scanned
                         sensorCells[sensorIdToCheck].classList.remove('next');
                         sensorCells[sensorIdToCheck].classList.add('success');
@@ -1170,24 +1177,33 @@
                             if (sensorCells[nextSensorId]) {
                                 sensorCells[nextSensorId].classList.add('next');
                                 
-                                // Update tooltip to indicate next sensor
+                                // Update tooltip to indicate next sensor and its code
+                                const nextCode = sensorCodeMap[nextSensorId];
+                                const codeText = nextCode ? ` (Code: ${nextCode})` : " (No code required)";
+                                
                                 sensorCells[nextSensorId].setAttribute(
                                     'data-tooltip', 
-                                    `Sensor #${nextSensorId} - Next to scan: ${sensorBarcodes[nextSensorId]}`
+                                    `Sensor #${nextSensorId} - Next to scan${codeText}`
                                 );
                             }
+                            
+                            // Update the scanning title
+                            updateScanningTitle();
                         } else {
                             // All sensors scanned, show complete button
                             completeButton.classList.remove('hidden');
                             completeButton.disabled = false;
+                            updateScanningTitle();
                             showNotification('All sensors verified! Click Complete to finish assembly.', 'success');
                         }
                         
                         return true;
                     } else {
-                        // Error - wrong barcode
-                        addLogEntry(`Error: Expected Sensor #${sensorIdToCheck} (${expectedBarcode}), got ${trimmedBarcode}`, 'error');
-                        showNotification(`Wrong sensor scanned! Expected Sensor #${sensorIdToCheck}`, 'error');
+                        // Error - wrong code
+                        const codeText = expectedCode ? ` with code ${expectedCode}` : " (any code accepted)";
+                        
+                        addLogEntry(`Error: Expected Sensor #${sensorIdToCheck}${codeText}, got ${trimmedBarcode}`, 'error');
+                        showNotification(`Wrong sensor code! Expected Sensor #${sensorIdToCheck}${codeText}`, 'error');
                         
                         // Add visual effect for error
                         const currentCell = sensorCells[sensorIdToCheck];
@@ -1199,6 +1215,102 @@
                         return false;
                     }
                 }
+            }
+
+            // Function to highlight the next item to scan
+            async function highlightNextItem() {
+                // Clear any existing highlights
+                document.querySelectorAll('.next').forEach(el => el.classList.remove('next'));
+                
+                if (currentSensorIndex <= 6) {
+                    // We're in the component scanning phase
+                    currentlyScanningType = 'components';
+                    
+                    const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                    const nextComponent = componentsArray.find(comp => !comp.scanned);
+                    
+                    if (nextComponent) {
+                        // Highlight the next component
+                        if (nextComponent.element) {
+                            nextComponent.element.classList.add('next');
+                        }
+                        
+                        // Get the expected code for this component
+                        const componentKey = Object.keys(components).find(key => components[key] === nextComponent);
+                        const expectedCode = componentCodeMap[componentKey];
+                        
+                        addLogEntry(`Next scan: ${nextComponent.name} (Code: ${expectedCode})`, 'info');
+                        showNotification(`Please scan ${nextComponent.name} (Code: ${expectedCode})`, 'info');
+                    } else {
+                        // All components scanned, move to sensors
+                        currentSensorIndex = 7;
+                        currentlyScanningType = 'sensors';
+                        
+                        // Mark the first sensor as next
+                        if (sensorCells[1]) {
+                            sensorCells[1].classList.add('next');
+                            
+                            // Get the expected code for this sensor
+                            const expectedCode = sensorCodeMap[1];
+                            const codeText = expectedCode ? ` (Code: ${expectedCode})` : " (No code required)";
+                            
+                            sensorCells[1].setAttribute('data-tooltip', `Sensor #1${codeText}`);
+                        }
+                        
+                        addLogEntry('All components scanned. Please start scanning sensors.', 'info');
+                        showNotification('All components scanned. Please start scanning sensors.', 'info');
+                    }
+                } else if (currentSensorIndex <= 31) { // Adjusted for 25 sensors + 6 components
+                    // We're in the sensor scanning phase
+                    currentlyScanningType = 'sensors';
+                    
+                    const sensorId = currentSensorIndex - 6;
+                    
+                    if (sensorId <= 25) { // For 25 sensors
+                        // Highlight the next sensor
+                        if (sensorCells[sensorId]) {
+                            sensorCells[sensorId].classList.add('next');
+                            
+                            // Get the expected code for this sensor
+                            const expectedCode = sensorCodeMap[sensorId];
+                            const codeText = expectedCode ? ` (Code: ${expectedCode})` : " (No code required)";
+                            
+                            sensorCells[sensorId].setAttribute('data-tooltip', `Sensor #${sensorId}${codeText}`);
+                        }
+                        
+                        // Get the expected code for this sensor
+                        const expectedCode = sensorCodeMap[sensorId];
+                        const codeText = expectedCode ? ` (Code: ${expectedCode})` : " (No code required)";
+                        
+                        addLogEntry(`Next scan: Sensor #${sensorId}${codeText}`, 'info');
+                        showNotification(`Please scan Sensor #${sensorId}${codeText}`, 'info');
+                    } else {
+                        // All sensors scanned
+                        completeButton.classList.remove('hidden');
+                        completeButton.disabled = false;
+                        
+                        addLogEntry('All sensors scanned. Please complete the assembly.', 'success');
+                        showNotification('All sensors scanned! Click Complete to finish assembly.', 'success');
+                    }
+                } else {
+                    // All items scanned
+                    completeButton.classList.remove('hidden');
+                    completeButton.disabled = false;
+                    
+                    addLogEntry('All items scanned. Please complete the assembly.', 'success');
+                    showNotification('All items scanned! Click Complete to finish assembly.', 'success');
+                }
+                
+                // Update the scanning title
+                updateScanningTitle();
+            }
+
+            // Initialize the page
+            async function initPage() {
+                setupInteractionEffects();
+                setupEventListeners();
+                await loadAssemblyState();
+                updateScanningTitle();
             }
 
             // Save current scan to the database
@@ -1335,66 +1447,105 @@
                 }
             }
 
-            // Function to highlight the next item to scan
-            async function highlightNextItem() {
-                // Clear any existing highlights
-                document.querySelectorAll('.next').forEach(el => el.classList.remove('next'));
+            // Get assembly ID from URL parameters
+            function getAssemblyId() {
+                // First try from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const id = urlParams.get('id');
                 
-                if (currentSensorIndex <= 6) {
-                    // We're in the component scanning phase
-                    const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
-                    const nextComponent = componentsArray.find(comp => !comp.scanned);
-                    
-                    if (nextComponent) {
-                        // Highlight the next component
-                        if (nextComponent.element) {
-                            nextComponent.element.classList.add('next');
-                        }
-                        
-                        addLogEntry(`Next scan: ${nextComponent.name} (${nextComponent.barcode})`, 'info');
-                        showNotification(`Please scan ${nextComponent.name}`, 'info');
-                    } else {
-                        // All components scanned, move to sensors
-                        currentSensorIndex = 7;
-                        
-                        // Mark the first sensor as next
-                        if (sensorCells[1]) {
-                            sensorCells[1].classList.add('next');
-                            sensorCells[1].setAttribute('data-tooltip', `Sensor #1 - Next to scan: ${sensorBarcodes[1]}`);
-                        }
-                        
-                        addLogEntry('All components scanned. Please start scanning sensors.', 'info');
-                        showNotification('All components scanned. Please start scanning sensors.', 'info');
-                    }
-                } else if (currentSensorIndex <= 31) { // Adjusted for 25 sensors + 6 components
-                    // We're in the sensor scanning phase
-                    const sensorId = currentSensorIndex - 6;
-                    
-                    if (sensorId <= 25) { // For 25 sensors
-                        // Highlight the next sensor
-                        if (sensorCells[sensorId]) {
-                            sensorCells[sensorId].classList.add('next');
-                            sensorCells[sensorId].setAttribute('data-tooltip', `Sensor #${sensorId} - Next to scan: ${sensorBarcodes[sensorId]}`);
-                        }
-                        
-                        addLogEntry(`Next scan: Sensor #${sensorId} (${sensorBarcodes[sensorId]})`, 'info');
-                        showNotification(`Please scan Sensor #${sensorId}`, 'info');
-                    } else {
-                        // All sensors scanned
-                        completeButton.classList.remove('hidden');
-                        completeButton.disabled = false;
-                        
-                        addLogEntry('All sensors scanned. Please complete the assembly.', 'success');
-                        showNotification('All sensors scanned! Click Complete to finish assembly.', 'success');
-                    }
-                } else {
-                    // All items scanned
-                    completeButton.classList.remove('hidden');
-                    completeButton.disabled = false;
-                    
-                    addLogEntry('All items scanned. Please complete the assembly.', 'success');
-                    showNotification('All items scanned! Click Complete to finish assembly.', 'success');
+                if (id) {
+                    // If found in URL, also save to localStorage for persistence
+                    localStorage.setItem('currentYBSAssemblyId', id);
+                    return id;
                 }
+                
+                // Fallback to localStorage if not in URL
+                return localStorage.getItem('currentYBSAssemblyId');
+            }
+            
+            // Get work order ID from URL parameters (for new assembly creation)
+            function getWorkOrderId() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('workOrderId');
+            }
+
+            // Helper to add visual interaction effects
+            function setupInteractionEffects() {
+                const cells = document.querySelectorAll('.cell');
+                const tooltip = document.getElementById('tooltip');
+                
+                cells.forEach(cell => {
+                    cell.addEventListener('mouseenter', function(e) {
+                        const tooltipText = this.getAttribute('data-tooltip');
+                        if (tooltipText) {
+                            tooltip.textContent = tooltipText;
+                            tooltip.classList.add('show');
+                            
+                            const rect = this.getBoundingClientRect();
+                            const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+                            
+                            tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
+                            tooltip.style.top = rect.bottom + 10 + 'px';
+                            
+                            if (parseFloat(tooltip.style.left) < tableRect.left) {
+                                tooltip.style.left = tableRect.left + 'px';
+                            } else if (parseFloat(tooltip.style.left) + tooltip.offsetWidth > tableRect.right) {
+                                tooltip.style.left = tableRect.right - tooltip.offsetWidth + 'px';
+                            }
+                        }
+                    });
+                    
+                    cell.addEventListener('mouseleave', function() {
+                        tooltip.classList.remove('show');
+                    });
+                });
+            }
+
+            // Function to show notification
+            function showNotification(message, type = 'info') {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = 'notification';
+                notification.classList.add(type);
+                notification.style.display = 'block';
+                
+                setTimeout(() => {
+                    notification.style.opacity = '1';
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    setTimeout(() => {
+                        notification.style.display = 'none';
+                    }, 300);
+                }, 3000);
+            }
+            
+            // Function to add log entry
+            function addLogEntry(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logItem = document.createElement('div');
+                logItem.classList.add('log-item', type);
+                logItem.innerHTML = `
+                    <span class="log-time">${timestamp}</span>
+                    <span class="log-message">${message}</span>
+                `;
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            }
+
+            // Function to update progress bar
+            function updateProgress() {
+                const totalItems = 31; // 6 components + 25 sensors
+                let scannedCount = scannedSensors.length;
+                
+                // Ensure we don't exceed 100%
+                if (scannedCount > totalItems) scannedCount = totalItems;
+                
+                const progressPercent = Math.round((scannedCount / totalItems) * 100);
+                
+                progressFill.style.width = `${progressPercent}%`;
+                progressPercentage.textContent = `${progressPercent}%`;
             }
 
             // Complete assembly function
@@ -1492,6 +1643,7 @@
                         // Reset variables
                         currentSensorIndex = 1;
                         scannedSensors = [];
+                        currentlyScanningType = 'components';
                         
                         // Reset all component states
                         Object.values(components).forEach(component => {
@@ -1528,6 +1680,9 @@
                                 })
                             });
                         }
+                        
+                        // Update the title
+                        updateScanningTitle();
                         
                         // Add new log entry
                         addLogEntry('Assembly has been restarted', 'info');
@@ -1666,6 +1821,12 @@
                         const storedIndex = localStorage.getItem('currentSensorIndex');
                         currentSensorIndex = storedIndex ? parseInt(storedIndex) : 1;
                     }
+                    
+                    // Set the current scanning type
+                    currentlyScanningType = currentSensorIndex <= 6 ? 'components' : 'sensors';
+                    
+                    // Update the title
+                    updateScanningTitle();
                     
                     // Load scanned parts from several possible sources
                     
@@ -1837,13 +1998,6 @@
                 restartButton.addEventListener('click', async function() {
                     await restartAssembly();
                 });
-            }
-
-            // Initialize the page
-            async function initPage() {
-                setupInteractionEffects();
-                setupEventListeners();
-                await loadAssemblyState();
             }
 
             // Setup cross-window communication for iframes
