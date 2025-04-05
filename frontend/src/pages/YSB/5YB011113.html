@@ -790,44 +790,38 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // NEW: Component code map - defines which characters to check in specific positions
-            const componentCodeMap = {
-                // Components
-                "left_pcb": "24",         // Left slave - code "24" (2 in 5th position, 4 in 6th)
-                "master_pcb": "25",       // Master - code "25" (2 in 5th position, 5 in 6th)
-                "right_pcb": "3Q4",       // Right PCB - code "3Q4" (3 in 5th, Q in 6th, 4 in 7th)
-                "b2b_left_master": "O",   // B2B (left-master) - code "O" (O in 5th position)
-                "b2b_master_right": "P",  // B2B (master-right) - code "P" (P in 5th position)
-                "pc_cable": "J",          // P&C cable - code "J" (J in 5th position)
+            const componentCodeMap = {};
+            let sensorCodeMap = {};
+            
+            // Updated item codes for components
+            const componentItemCodes = {
+                "left_pcb": "4YB013250",     // Left slave PCB
+                "master_pcb": "4YB013249",   // Master PCB
+                "right_pcb": "4YB013251",    // Right Slave PCB
+                "b2b_left_master": "4YB013275", // B2B (left-master)
+                "b2b_master_right": "4YB013275", // B2B (master-right)
+                "pc_cable": "4YB013274"      // Power & Communication Cable
             };
 
-            // NEW: Sensor code mapping - individual codes for each sensor
-            const sensorCodeMap = {
-                1: "1",    // Sensor 1: code "1"
-                2: "1",    // Sensor 2: code "1"
-                3: "1",    // Sensor 3: code "1"
-                4: "1",    // Sensor 4: code "1"
-                5: "1",    // Sensor 5: code "1"
-                6: "1",    // Sensor 6: code "1"
-                7: "1",    // Sensor 7: code "1"
-                8: "1",    // Sensor 8: code "1"
-                9: "1",    // Sensor 9: code "1"
-                10: "1",   // Sensor 10: code "1"
-                11: "1",   // Sensor 11: code "1"
-                12: "1",   // Sensor 12: code "1"
-                13: "2",   // Sensor 13: code "2"
-                14: "2",   // Sensor 14: code "2"
-                15: "2",   // Sensor 15: code "2"
-                16: "2",   // Sensor 16: code "2"
-                17: "2",   // Sensor 17: code "2"
-                18: "2",   // Sensor 18: code "2"
-                19: "2",   // Sensor 19: code "2"
-                20: "2",   // Sensor 20: code "2"
-                21: "2",   // Sensor 21: code "2"
-                22: "2",   // Sensor 22: code "2"
-                23: "",    // Sensor 23: no code (automatically passes)
-                24: "",    // Sensor 24: no code (automatically passes)
-                25: ""     // Sensor 25: no code (automatically passes)
+            // Updated sensor item codes
+            const sensorItemCodes = {
+                1: "5YB013263",   // Special sensor code
+                16: "5YB013263",  // Special sensor code
+                17: "5YB013263",  // Special sensor code
+                22: "5YB013263",  // Special sensor code
+                23: "5YB013263",  // Special sensor code
+                24: "5YB013263",  // Special sensor code
+                25: "5YB013263"   // Special sensor code
             };
+            
+            // Default item code for sensors 2-15 and 18-21
+            const defaultSensorItemCode = "5YB013262";
+            
+            // API endpoint for inventory data
+            const API_URL = '/api';
+            
+            // Flag to track if API initialization was successful
+            let apiInitialized = false;
             
             // Sensor barcode mapping for 25 sensors (kept for reference and UI display)
             const sensorBarcodes = {
@@ -866,21 +860,24 @@
                     name: "Left Slave PCB",
                     element: document.querySelector('#left-pcb'),
                     scanned: false,
-                    index: 1
+                    index: 1,
+                    item_code: componentItemCodes.left_pcb
                 },
                 "master_pcb": {
                     barcode: "V22C90068", // No longer used for direct matching
                     name: "Master PCB",
                     element: document.querySelector('#master-pcb'),
                     scanned: false,
-                    index: 2
+                    index: 2,
+                    item_code: componentItemCodes.master_pcb
                 },
                 "right_pcb": {
                     barcode: "V22CR0129", // No longer used for direct matching
                     name: "Right Slave PCB",
                     element: document.querySelector('#right-pcb'),
                     scanned: false,
-                    index: 3
+                    index: 3,
+                    item_code: componentItemCodes.right_pcb
                 },
                 
                 // Board-to-Board connections
@@ -889,14 +886,16 @@
                     name: "Board-to-Board (Left to Master)",
                     element: document.querySelector('#board-to-board-left'),
                     scanned: false,
-                    index: 4
+                    index: 4,
+                    item_code: componentItemCodes.b2b_left_master
                 },
                 "b2b_master_right": {
                     barcode: "P22BV0476", // No longer used for direct matching
                     name: "Board-to-Board (Master to Right)",
                     element: document.querySelector('#board-to-board-right'),
                     scanned: false,
-                    index: 5
+                    index: 5,
+                    item_code: componentItemCodes.b2b_master_right
                 },
                 
                 // Power & Communication Cable
@@ -905,7 +904,8 @@
                     name: "Power & Communication Cable",
                     element: document.querySelector('.power-cable'),
                     scanned: false,
-                    index: 6
+                    index: 6,
+                    item_code: componentItemCodes.pc_cable
                 }
             };
 
@@ -1057,8 +1057,141 @@
                 }
             }
 
-            // NEW: Function to verify barcode using code position checking
+            // Function to fetch inventory data and set up verification codes
+            async function fetchInventoryItems() {
+                try {
+                    addLogEntry('Fetching inventory data from API...', 'info');
+                    
+                    // First try to get all component codes
+                    for (const [key, itemCode] of Object.entries(componentItemCodes)) {
+                        try {
+                            const response = await fetch(`${API_URL}/item-master/?search=${itemCode}`);
+                            if (response.ok) {
+                                const data = await response.json();
+                                if (data && data.length > 0) {
+                                    // Save the verification code for this component
+                                    componentCodeMap[key] = data[0].code || "";
+                                    addLogEntry(`Found component code for ${key}: ${componentCodeMap[key]}`, 'info');
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching component code for ${key}:`, error);
+                        }
+                    }
+                    
+                    // Then get all sensor codes
+                    // Special sensors (1, 16, 17, 22, 23, 24, 25)
+                    for (const sensorId of [1, 16, 17, 22, 23, 24, 25]) {
+                        try {
+                            const response = await fetch(`${API_URL}/item-master/?search=${sensorItemCodes[sensorId]}`);
+                            if (response.ok) {
+                                const data = await response.json();
+                                if (data && data.length > 0) {
+                                    // Save the verification code for this sensor
+                                    sensorCodeMap[sensorId] = data[0].code || "1";
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching sensor code for sensor ${sensorId}:`, error);
+                        }
+                    }
+                    
+                    // Default sensors (2-15, 18-21)
+                    try {
+                        const response = await fetch(`${API_URL}/item-master/?search=${defaultSensorItemCode}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.length > 0) {
+                                const defaultCode = data[0].code || "1";
+                                
+                                // Apply this code to all default sensors
+                                for (let i = 2; i <= 15; i++) {
+                                    sensorCodeMap[i] = defaultCode;
+                                }
+                                for (let i = 18; i <= 21; i++) {
+                                    sensorCodeMap[i] = defaultCode;
+                                }
+                                
+                                addLogEntry(`Found default sensor code: ${defaultCode}`, 'info');
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching default sensor code:`, error);
+                    }
+                    
+                    // Check if we have all the necessary codes
+                    const hasAllComponentCodes = Object.keys(componentItemCodes).every(key => key in componentCodeMap);
+                    const hasAllSensorCodes = Array.from({length: 25}, (_, i) => i + 1).every(i => i in sensorCodeMap);
+                    
+                    if (hasAllComponentCodes && hasAllSensorCodes) {
+                        addLogEntry('All verification codes fetched successfully!', 'success');
+                        apiInitialized = true;
+                        return true;
+                    } else {
+                        // API didn't return all the necessary codes
+                        showApiFailureMessage();
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Error fetching inventory data:', error);
+                    showApiFailureMessage();
+                    return false;
+                }
+            }
+            
+            // Function to show API failure message
+            function showApiFailureMessage() {
+                document.getElementById('mainContainer').innerHTML = `
+                    <div style="text-align: center; padding: 2rem;">
+                        <h2 style="color: #dc2626; margin-bottom: 1rem;">API Connection Failed</h2>
+                        <p style="margin-bottom: 1.5rem;">Unable to retrieve verification codes from the inventory system.</p>
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 1rem; border-radius: 0.375rem; text-align: left;">
+                            <h3 style="color: #475569; font-size: 1rem; margin-bottom: 0.75rem;">Technical Information</h3>
+                            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Error: Failed to retrieve verification codes from API</p>
+                            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Component IDs:</p>
+                            <ul style="color: #475569; font-size: 0.9rem; margin-left: 1.5rem; margin-bottom: 1rem;">
+                                ${Object.entries(componentItemCodes).map(([key, code]) => `<li>${key}: ${code}</li>`).join('')}
+                            </ul>
+                            <p style="color: #475569; font-size: 0.9rem;">Please provide this information to IT support.</p>
+                        </div>
+                        <button onclick="window.location.reload()"
+                                style="margin-top: 2rem; background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                       border: none; border-radius: 0.375rem; cursor: pointer;">
+                            Try Again
+                        </button>
+                    </div>
+                `;
+                
+                apiInitialized = false;
+            }
+
+            // Function to verify code positions in barcode
+            function verifyCodePositions(barcode, expectedCode) {
+                if (!expectedCode || expectedCode === "") {
+                    // If no expected code, it automatically passes
+                    return true;
+                }
+                
+                // Check if the barcode matches the expected code pattern
+                let isMatch = true;
+                for (let i = 0; i < expectedCode.length; i++) {
+                    // Check if the character at position 4+i (5th position for i=0) matches the expected code
+                    if (barcode.length <= 4 + i || barcode[4 + i] !== expectedCode[i]) {
+                        isMatch = false;
+                        break;
+                    }
+                }
+                
+                return isMatch;
+            }
+
+            // NEW: Function to verify barcode using code position checking from API
             async function verifyBarcode(barcode) {
+                if (!apiInitialized) {
+                    showNotification('API connection not initialized', 'error');
+                    return false;
+                }
+                
                 const trimmedBarcode = barcode.trim();
                 
                 // Check if we're scanning components first (PCBs, cables, etc.)
@@ -1093,7 +1226,7 @@
                         return false;
                     }
                     
-                    // Get the expected code for this component
+                    // Get the component type and expected code
                     const componentKey = Object.keys(components).find(key => components[key] === nextComponent);
                     const expectedCode = componentCodeMap[componentKey];
                     
@@ -1103,14 +1236,7 @@
                     }
                     
                     // Check if the barcode matches the expected code pattern
-                    let isMatch = true;
-                    for (let i = 0; i < expectedCode.length; i++) {
-                        // Check if the character at position 4+i (5th position for i=0) matches the expected code
-                        if (trimmedBarcode.length <= 4 + i || trimmedBarcode[4 + i] !== expectedCode[i]) {
-                            isMatch = false;
-                            break;
-                        }
-                    }
+                    const isMatch = verifyCodePositions(trimmedBarcode, expectedCode);
                     
                     if (isMatch) {
                         // Success - mark the component as scanned
@@ -1229,14 +1355,7 @@
                         showNotification(`Sensor #${sensorIdToCheck} verified successfully!`, 'success');
                     } else {
                         // Check if the barcode matches the expected code pattern
-                        let isMatch = true;
-                        for (let i = 0; i < expectedCode.length; i++) {
-                            // Check if the character at position 4+i (5th position for i=0) matches the expected code
-                            if (trimmedBarcode.length <= 4 + i || trimmedBarcode[4 + i] !== expectedCode[i]) {
-                                isMatch = false;
-                                break;
-                            }
-                        }
+                        const isMatch = verifyCodePositions(trimmedBarcode, expectedCode);
                         
                         if (!isMatch) {
                             // Error - wrong barcode
@@ -1983,12 +2102,33 @@
             async function initPage() {
                 setupInteractionEffects();
                 setupEventListeners();
+                
+                // Fetch inventory data first
+                const apiSuccess = await fetchInventoryItems();
+                
+                if (!apiSuccess) {
+                    // Don't continue if API fetch failed
+                    return;
+                }
+                
                 await loadAssemblyState();
                 
                 // Initialize the scanning instructions with the first component
                 const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
                 const firstComponent = componentsArray[0];
                 updateScanningInstructions(firstComponent);
+                
+                // Display item codes in logs for reference
+                addLogEntry('Starting new assembly. Component item codes:', 'info');
+                Object.keys(components).forEach(key => {
+                    const component = components[key];
+                    addLogEntry(`${component.index}. ${component.name} - Item Code: ${component.item_code}`, 'info');
+                });
+                
+                // Display sensor item codes
+                addLogEntry('Sensor Item Codes:', 'info');
+                addLogEntry(`Sensors 1, 16, 17, 22, 23, 24, and 25: ${sensorItemCodes[1]}`, 'info');
+                addLogEntry(`All other sensors: ${defaultSensorItemCode}`, 'info');
             }
 
             // Setup cross-window communication for iframes

@@ -673,7 +673,7 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
                     </div>
                     <div className="ml-3">
                       <div className="text-base font-medium text-neutral-800 dark:text-white">User</div>
-                      <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400">john.doe@example.com</div>
+                      <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400">user@example.com</div>
                     </div>
                   </div>
                   <div className="mt-3 space-y-1">
