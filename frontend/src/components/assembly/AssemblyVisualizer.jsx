@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';
 
 const AssemblyVisualizer = ({
-  assemblyType, // 'YSB' or 'RSM'
+  assemblyType, // 'YBS' or 'RSM'
   itemCode,
   components,
   sensors,
@@ -164,7 +164,7 @@ const AssemblyVisualizer = ({
 };
 
 AssemblyVisualizer.propTypes = {
-  assemblyType: PropTypes.oneOf(['YSB', 'RSM']).isRequired,
+  assemblyType: PropTypes.oneOf(['YBS', 'RSM']).isRequired,
   itemCode: PropTypes.string.isRequired,
   components: PropTypes.arrayOf(
     PropTypes.shape({

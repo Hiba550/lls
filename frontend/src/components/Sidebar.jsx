@@ -66,7 +66,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       hasSubmenu: true,
       submenu: [
         { id: 'assembly-dashboard', label: 'Assembly Dashboard', path: '/assembly' },
-        { id: 'ysb-assembly', label: 'YSB Assembly', path: '/assembly/ysb' },
+        { id: 'ybs-assembly', label: 'YBS Assembly', path: '/assembly/ybs' },
         { id: 'rsm-assembly', label: 'RSM Assembly', path: '/assembly/rsm' }
       ]
     },

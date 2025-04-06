@@ -9,7 +9,7 @@ const NavBar = () => {
   const navItems = [
     { name: 'Dashboard', path: '/' },
     { name: 'Assembly', path: '/assembly' },
-    { name: 'YSB Assembly', path: '/assembly/ysb' },
+    { name: 'YBS Assembly', path: '/assembly/ybs' },
     { name: 'RSM Assembly', path: '/assembly/rsm' },
     { name: 'Inventory', path: '/inventory' }
   ];

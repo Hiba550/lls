@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive YBS Machine Circuit Board Layout - 5RS011112</title>
+    <style>
+        :root {
+            /* PCB Colors */
+            --left-pcb-color: #d9f9d9; /* Light Green for Slave */
+            /* --master-pcb-color: #d3d3d3; /* Grey for Master - Not used */
+
+            /* Cable Colors */
+            --board-to-board-yellow: #fff3cd; /* Yellow for Slave-Slave */
+            /* --board-to-board-orange: #ffe8cc; /* Orange for Master-Slave - Not used */
+            --board-to-board-color: #999; /* Fallback/Base */
+
+            /* Other Styles */
+            --highlight-yellow: #ffeb3b;
+            --border-color: #aaa;
+            --hover-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+            --transition-speed: 0.2s;
+            --bg-color-body: #f8f8f8;
+            --bg-color-container: #fff;
+            --text-color-dark: #333;
+            --text-color-light: #f1f5f9;
+            --header-border-color: #ddd;
+            --component-name-bg: #e9ecef;
+            --component-name-text: var(--text-color-dark);
+            --tooltip-bg: rgba(54, 69, 79, 0.95);
+            --tooltip-text: var(--text-color-light);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 1.5rem;
+            background-color: var(--bg-color-body);
+            color: var(--text-color-dark);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--bg-color-container);
+            border-radius: 0.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--header-border-color);
+        }
+
+        .title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-color-dark);
+            margin-bottom: 0.75rem;
+            text-shadow: 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .part-id {
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #f97316;
+            color: var(--text-color-light);
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            line-height: 1.3; /* Adjusted for multi-line */
+        }
+
+        .board-to-board-title {
+            color: #38bdf8;
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin: 1.5rem 0;
+            text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
+            position: relative;
+        }
+
+        .board-to-board-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+        }
+
+        .circuit-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1.5px solid var(--border-color);
+            border-radius: 0.375rem;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 10;
+            background-color: #fff;
+        }
+
+        .circuit-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.25rem;
+            font-size: 0.75rem;
+            height: 2.5rem;
+            position: relative;
+            transition: all var(--transition-speed) ease;
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        .component-name {
+            text-align: left;
+            font-weight: 700;
+            padding-left: 1rem;
+            background-color: var(--component-name-bg);
+            color: var(--component-name-text);
+            width: 8rem;
+            vertical-align: middle;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .component-name::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,0,0,0.05));
+        }
+
+        .cell {
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition-speed) ease;
+            cursor: pointer;
+        }
+
+        .cell:hover {
+            transform: scale(1.05);
+            box-shadow: var(--hover-shadow);
+            z-index: 100;
+        }
+
+        .left-pcb { /* Slave PCB - Light Green */
+            background-color: var(--left-pcb-color);
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+        }
+
+        .left-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        /* Removed .master-pcb style */
+
+        .board-to-board { /* Base style for connection cables */
+            color: var(--text-color-dark); /* Default text color */
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.2;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+        }
+
+        .board-to-board-yellow { /* Slave-to-Slave Cable - Yellow */
+            background-color: var(--board-to-board-yellow);
+        }
+
+        /* Removed .board-to-board-orange style */
+
+        .power-cable { /* P&C Cable - White */
+            background-color: #ffffff;
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.75rem 0.25rem;
+            vertical-align: middle;
+            background-image: linear-gradient(to bottom, #f9f9f9, #ffffff);
+        }
+
+        .empty-cell {
+            background-color: #ffffff;
+            cursor: default;
+        }
+        .empty-cell:hover {
+             transform: none;
+             box-shadow: none;
+             z-index: auto;
+        }
+
+
+        .circuit-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .circuit-lines::before { /* Subtle background pattern */
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 40% 70%, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                radial-gradient(circle at 50% 40%, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+            background-size: 100px 100px;
+        }
+
+        .glow { /* Subtle gradient glow */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05), transparent 70%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: var(--tooltip-bg);
+            color: var(--tooltip-text);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 200px;
+            z-index: 1000;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            transform: translateY(10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            white-space: normal; /* Allow tooltip text to wrap */
+             /* For dynamic arrow positioning - default above */
+            --tooltip-arrow-border-color: var(--tooltip-bg) transparent transparent;
+            --tooltip-arrow-top: 100%;
+            --tooltip-arrow-bottom: auto;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip::after { /* Arrow */
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px;
+            border-style: solid;
+             /* Use CSS variables for dynamic direction */
+            border-color: var(--tooltip-arrow-border-color);
+            top: var(--tooltip-arrow-top);
+            bottom: var(--tooltip-arrow-bottom);
+        }
+
+
+        .connection-line {
+            position: absolute;
+            background: rgba(56, 189, 248, 0.4);
+            height: 2px;
+            z-index: 15;
+            transform-origin: left;
+            transform: scaleX(0);
+            pointer-events: none;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .connection-line.active {
+            transform: scaleX(1);
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+        }
+
+
+        @media (max-width: 992px) {
+            .container { padding: 1rem; }
+            .component-name { width: 6rem; font-size: 0.7rem; }
+            .left-pcb { font-size: 0.65rem; padding: 0.5rem 0.125rem; }
+            .board-to-board, .board-to-board-yellow { font-size: 0.65rem; padding: 0.5rem 0.125rem; }
+            .power-cable { font-size: 0.75rem; }
+        }
+
+        @media (max-width: 768px) {
+            .title { font-size: 1.5rem; }
+            .board-to-board-title { font-size: 1.75rem; }
+            .circuit-table { font-size: 0.65rem; }
+            .circuit-table td { font-size: 0.65rem; }
+            .component-name { width: 5rem; font-size: 0.65rem; }
+            .left-pcb { font-size: 0.6rem; }
+            .board-to-board, .board-to-board-yellow { font-size: 0.6rem; line-height: 1.1; }
+            .power-cable { font-size: 0.7rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <div class="header">
+            <div class="part-id">5RS011112 <br> 3 Slave <br> 65 mm</div>
+            <h1 class="title">RAP - ILI DUCT ASSEMBLY</h1>
+        </div>
+
+        <div class="board-to-board-title">Board to Board</div>
+
+        <div class="circuit-lines"></div>
+        <div class="glow"></div>
+
+        <table class="circuit-table" id="circuitTable">
+            <tbody>
+                <tr>
+                    <td class="component-name">PCB BOARD</td>
+                    <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                    <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                    <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                </tr>
+                <tr>
+                    <td class="component-name">Joining Cable</td>
+                    <td class="cell empty-cell" colspan="6"></td> <!-- Space before 1st cable -->
+                    <td class="cell board-to-board board-to-board-yellow" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM">Slave to Slave PCB <br>(10-12) - xxx</td>
+                    <td class="cell empty-cell" colspan="4"></td> <!-- Space between 1st & 2nd -->
+                    <td class="cell board-to-board board-to-board-yellow" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM">Slave to Slave PCB <br>(10-12) - xxx</td>
+                    <td class="cell empty-cell" colspan="6"></td> <!-- Space after 2nd cable -->
+                 </tr>
+                <tr>
+                    <td class="component-name">P&C Cable</td>
+                    <td class="power-cable cell" colspan="24" data-tooltip="RSM - POWER & COMMUNICATION CABLE ASSY without RMC - BL Ver - (75mm Pitch)">RSM - POWER & COMMUNICATION CABLE ASSY without RMC - BL Ver - (75mm Pitch)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div id="tooltip" class="tooltip"></div>
+        <!-- Connection lines - Note: JS positioning needs adjustment for this layout -->
+        <div id="connectionLine1" class="connection-line"></div>
+        <div id="connectionLine2" class="connection-line"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const cells = document.querySelectorAll('.cell');
+            const tooltip = document.getElementById('tooltip');
+            const mainContainer = document.getElementById('mainContainer'); // Get container reference
+
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', function(e) {
+                    if (this.classList.contains('empty-cell')) return; // Skip empty cells
+
+                    const tooltipText = this.getAttribute('data-tooltip');
+                    if (tooltipText) {
+                        tooltip.innerHTML = tooltipText; // Use innerHTML for <br>
+                        tooltip.classList.add('show');
+
+                        const rect = this.getBoundingClientRect();
+                        const containerRect = mainContainer.getBoundingClientRect();
+
+                        // Try positioning above first
+                        let tooltipTop = rect.top - containerRect.top - tooltip.offsetHeight - 10;
+                        let arrowPointsDown = true;
+
+                        // If not enough space above, position below
+                        if (tooltipTop < 0 || (tooltipTop < 10 && (rect.bottom + tooltip.offsetHeight + 20) < containerRect.height)) { // Check if below fits better than crammed top
+                             tooltipTop = rect.top - containerRect.top + rect.height + 10;
+                             arrowPointsDown = false;
+                        }
+
+                        // Adjust horizontal position & check bounds
+                        let tooltipLeft = rect.left - containerRect.left + (rect.width / 2) - (tooltip.offsetWidth / 2);
+                        if (tooltipLeft < 5) tooltipLeft = 5;
+                        else if (tooltipLeft + tooltip.offsetWidth > containerRect.width - 5) {
+                            tooltipLeft = containerRect.width - tooltip.offsetWidth - 5;
+                        }
+
+                        // Set final positions
+                        tooltip.style.left = tooltipLeft + 'px';
+                        tooltip.style.top = tooltipTop + 'px';
+
+                        // Set CSS variables for arrow direction
+                        if (arrowPointsDown) {
+                            tooltip.style.setProperty('--tooltip-arrow-border-color', 'var(--tooltip-bg) transparent transparent');
+                            tooltip.style.setProperty('--tooltip-arrow-top', '100%'); // Arrow at bottom pointing down
+                            tooltip.style.setProperty('--tooltip-arrow-bottom', 'auto');
+                        } else {
+                             tooltip.style.setProperty('--tooltip-arrow-border-color', 'transparent transparent var(--tooltip-bg)');
+                             tooltip.style.setProperty('--tooltip-arrow-top', 'auto');
+                             tooltip.style.setProperty('--tooltip-arrow-bottom', '100%'); // Arrow at top pointing up
+                        }
+                    }
+                });
+
+                cell.addEventListener('mouseleave', function() {
+                    tooltip.classList.remove('show');
+                });
+            });
+
+            // --- Connection Line Logic (Requires Adjustment for Correct Positioning) ---
+            // Targets the first two elements with 'board-to-board' class (the two yellow cables).
+            // The 'left' and 'width' values likely need manual adjustment for the 5RS011112 layout.
+            const boardToBoardCables = document.querySelectorAll('.board-to-board');
+            const connectionLine1 = document.getElementById('connectionLine1');
+            const connectionLine2 = document.getElementById('connectionLine2');
+            const table = document.getElementById('circuitTable');
+
+            function setupConnectionLine(cableElement, lineElement) {
+                if (!cableElement || !lineElement) return; // Exit if elements don't exist
+
+                const tableRect = table.getBoundingClientRect(); // Get table position reference
+
+                cableElement.addEventListener('mouseenter', function() {
+                    const lineRect = cableElement.getBoundingClientRect();
+                    // *** These values NEED ADJUSTMENT for the 5RS011112 layout ***
+                    // Attempting a slightly more dynamic approach, but may still need tuning
+                    const cableStyle = window.getComputedStyle(cableElement);
+                    const paddingLeft = parseFloat(cableStyle.paddingLeft);
+                    const paddingRight = parseFloat(cableStyle.paddingRight);
+
+                    lineElement.style.top = (lineRect.top - tableRect.top + lineRect.height / 2 - 1) + 'px'; // Center vertically
+                    lineElement.style.left = (lineRect.left - tableRect.left + paddingLeft) + 'px'; // Start after left padding
+                    lineElement.style.width = (lineRect.width - paddingLeft - paddingRight) + 'px'; // Span content width
+                    // *** End of values needing adjustment ***
+
+                    lineElement.style.transformOrigin = 'left';
+                    lineElement.style.transform = 'scaleX(0)'; // Reset before animating
+                    setTimeout(() => { lineElement.classList.add('active'); }, 10);
+                });
+
+                cableElement.addEventListener('mouseleave', function() {
+                    lineElement.classList.remove('active');
+                });
+            }
+
+            setupConnectionLine(boardToBoardCables[0], connectionLine1); // Setup for first cable
+            setupConnectionLine(boardToBoardCables[1], connectionLine2); // Setup for second cable
+
+            // --- End Connection Line Logic ---
+
+            // Add transition class after initial render
+             setTimeout(() => {
+                 const allCells = document.querySelectorAll('.circuit-table td');
+                 allCells.forEach(c => {
+                    c.style.transition = 'all var(--transition-speed) ease';
+                 });
+                 if(connectionLine1) connectionLine1.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
+                 if(connectionLine2) connectionLine2.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
+            }, 50);
+        });
+    </script>
+</body>
+</html>

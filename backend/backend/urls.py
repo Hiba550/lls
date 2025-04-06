@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/', include('backend.apps.assembly.urls')),
     path('api/', include('backend.apps.work_order.urls')),
     path('api-auth/', include('rest_framework.urls')),
+    path('api/', include('users.urls')),  # Include the user management URLs
     
     # drf-yasg API documentation endpoints
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

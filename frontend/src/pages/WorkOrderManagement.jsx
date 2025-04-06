@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import WorkOrders from './WorkOrders';
 import WorkOrderForm from './WorkOrderForm';
 import WorkOrderDetail from './WorkOrderDetail';
-import YSBAssemblyManager from './YSBAssemblyManager';
+import YSBAssemblyManager from './YBSAssemblyManager';
 import RSMAssemblyManager from './RSMAssemblyManager';
 
 const WorkOrderManagement = () => {
@@ -22,7 +22,7 @@ const WorkOrderManagement = () => {
   <Route path="/create" element={<WorkOrderForm />} />
   <Route path="/:id" element={<WorkOrderDetail />} />
   <Route path="/:id/edit" element={<WorkOrderForm />} />
-  <Route path="/ysb/*" element={<YSBAssemblyManager />} />
+  <Route path="/ybs/*" element={<YSBAssemblyManager />} />
   <Route path="/rsm/*" element={<RSMAssemblyManager />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>

@@ -577,29 +577,29 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden bg-neutral-50 dark:bg-neutral-800 hover:shadow-md transition-all duration-300">
             <div className="bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2.5">
-              <h3 className="text-white font-semibold">YSB Assembly</h3>
+              <h3 className="text-white font-semibold">YBS Assembly</h3>
             </div>
             <div className="p-4">
               <div className="aspect-w-16 aspect-h-9 bg-neutral-100 dark:bg-neutral-700 rounded-md mb-3">
                 <img 
-                  src="/images/ysb-assembly.png" 
-                  alt="YSB Assembly" 
+                  src="/images/ybs-assembly.png" 
+                  alt="YBS Assembly" 
                   className="object-cover h-40 w-full rounded-md"
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.parentElement.classList.add("flex", "items-center", "justify-center");
-                    e.target.parentElement.innerHTML = '<span class="text-neutral-400 dark:text-neutral-500">YSB Assembly Image</span>';
+                    e.target.parentElement.innerHTML = '<span class="text-neutral-400 dark:text-neutral-500">YBS Assembly Image</span>';
                   }}
                 />
               </div>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                Verify and assemble YSB components with barcode scanning.
+                Verify and assemble YBS components with barcode scanning.
               </p>
               <Link
-                to="/assembly/ysb"
+                to="/assembly/ybs"
                 className="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
               >
-                Go to YSB Assembly
+                Go to YBS Assembly
               </Link>
             </div>
           </div>

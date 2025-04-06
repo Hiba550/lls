@@ -42,6 +42,9 @@ RSM011092	1M 3S V1	RSM - POWER & COMMUNICATION CABLE ASSY with RMC - (70MM PITCH
 RSM011093	3S V1	RSM - POWER & COMMUNICATION CABLE ASSY without RMC - (70MM PITCH) - V2
 """
 
+# Before processing, update item codes in the data
+pcb_data = pcb_data.replace('YSB', 'YBS')
+
 def extract_spindle_count(name):
     """Extract spindle count from name if present"""
     match = re.search(r'(\d+)\s*spindle', name, re.IGNORECASE)
@@ -83,7 +86,7 @@ def process_pcb_data(data_str):
             
             if item_code and name and cable_description:
                 # Determine category based on item code
-                category = 'YSB' if item_code.startswith('YSB') else 'RSM'
+                category = 'YBS' if item_code.startswith('YSB') else 'RSM'
                 
                 # Extract spindle count and pitch if available
                 spindle_count = extract_spindle_count(name)

@@ -1,82 +1,62 @@
-import React, { useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import TopNavigation from './TopNavigation';
 import Footer from './Footer';
 import { useTheme } from '../context/ThemeContext';
-import TopNavigation from './TopNavigation';
+import designSystem from '../theme/designSystem';
 
+/**
+ * Main Layout component - Performance optimized for industrial applications
+ * Provides the core structure for all pages with improved rendering performance
+ */
 const Layout = () => {
   const { darkMode } = useTheme();
-  const location = useLocation();
-
-  // Scroll to top on route change
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Initial loading state to prevent layout shift
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
-
-  // Page transition variants
-  const pageVariants = {
-    initial: {
-      opacity: 0,
-      y: 10
-    },
-    in: {
-      opacity: 1,
-      y: 0
-    },
-    out: {
-      opacity: 0,
-      y: -10
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Apply dark/light mode to body element
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
     }
-  };
+  }, [darkMode]);
 
-  const pageTransition = {
-    type: "tween",
-    ease: "easeInOut",
-    duration: 0.3
-  };
+  // Return loading state to prevent layout shift on initial render
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-neutral-900">
+        <div className="flex flex-col items-center">
+          <div className="h-8 w-8 border-2 border-blue-300 dark:border-blue-700 border-t-blue-600 dark:border-t-blue-300 rounded-full animate-spin"></div>
+          <p className="mt-3 text-blue-600 dark:text-blue-400 text-sm font-medium">Loading Assembly Management</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div 
-      className={`flex flex-col min-h-screen w-full ${darkMode ? 'dark' : ''}`}
-      style={{
-        backgroundImage: darkMode 
-          ? 'radial-gradient(circle at 1px 1px, rgb(38, 38, 38) 1px, transparent 0), linear-gradient(to bottom, rgba(13,13,13,0.8) 0%, rgba(0,0,0,0) 100%)' 
-          : 'radial-gradient(circle at 1px 1px, rgb(225, 225, 225) 1px, transparent 0), linear-gradient(to bottom, rgba(240,240,240,0.8) 0%, rgba(255,255,255,0) 100%)',
-        backgroundSize: '40px 40px, 100% 100%',
-        backgroundAttachment: 'fixed'
-      }}
-    >
-      {/* Top Navigation Bar */}
-      <TopNavigation />
+    <div className="min-h-screen flex flex-col bg-neutral-50 dark:bg-neutral-900 text-neutral-800 dark:text-white">
+      {/* Top Navigation */}
+      <TopNavigation companyName="Assembly Management" />
       
       {/* Main Content */}
-      <AnimatePresence mode="wait">
-        <motion.div 
-          key={location.pathname}
-          initial="initial"
-          animate="in"
-          exit="out"
-          variants={pageVariants}
-          transition={pageTransition}
-          className="flex flex-col flex-1 w-full bg-white/60 dark:bg-neutral-900/60 backdrop-blur-sm transition-colors duration-150"
-        >
-          {/* Main Content Area - Full width to maximize screen space */}
-          <main className="flex-1 w-full overflow-x-hidden">
-            <div className="w-full mx-auto px-2 sm:px-3 py-3 sm:py-4 min-h-[calc(100vh-theme(spacing.16)-theme(spacing.14))]">
-              <div className="bg-white dark:bg-neutral-800 shadow-lg rounded-xl overflow-hidden border border-neutral-100 dark:border-neutral-700">
-                <div className="h-1 w-full bg-gradient-to-r from-primary-500 via-primary-400 to-primary-600"></div>
-                <div className="p-2 sm:p-4 lg:p-5">
-                  <Outlet />
-                </div>
-              </div>
-            </div>
-          </main>
-
-          {/* Footer */}
-          <Footer />
-        </motion.div>
-      </AnimatePresence>
+      <main className="flex-grow">
+        <Outlet />
+      </main>
+      
+      {/* Footer - optimized for print layouts to exclude from printing */}
+      <Footer />
     </div>
   );
 };

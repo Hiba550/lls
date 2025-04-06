@@ -26,7 +26,7 @@ const AppNavigation = () => {
         </svg>
       ),
       children: [
-        { name: 'YBS Assembly', path: '/assembly/ysb' },
+        { name: 'YBS Assembly', path: '/assembly/ybs' },
         { name: 'RSM Assembly', path: '/assembly/rsm' }
       ]
     },

@@ -1008,6 +1008,19 @@
             async function verifyBarcode(barcode) {
                 const trimmedBarcode = barcode.trim();
                 
+                // Check if this barcode has already been scanned
+                const alreadyScannedComponent = scannedComponents.find(comp => comp.barcode === trimmedBarcode);
+                if (alreadyScannedComponent) {
+                    // Get the component details
+                    const componentObj = Object.values(components).find(c => c.barcode === trimmedBarcode);
+                    const componentName = componentObj ? componentObj.name : 'Component';
+                    
+                    // Show error message
+                    addLogEntry(`Error: ${componentName} with barcode ${trimmedBarcode} has already been scanned`, 'error');
+                    showNotification(`Duplicate barcode! ${componentName} already scanned`, 'error');
+                    return false;
+                }
+                
                 // Get components array in sequence order
                 const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
                 

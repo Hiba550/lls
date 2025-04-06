@@ -45,7 +45,7 @@ export const fetchPCBTypes = async () => {
     
     // Provide mock data for development
     return [
-      { id: 1, code: 'YSB', name: 'Yarn Breaking System', prefix: '5YB', active: true },
+      { id: 1, code: 'YBS', name: 'Yarn Breaking System', prefix: '5YB', active: true },
       { id: 2, code: 'RSM', name: 'Roland Sound Module', prefix: '5RS', active: true }
     ];
   }

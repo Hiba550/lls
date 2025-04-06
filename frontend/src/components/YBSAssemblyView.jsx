@@ -17,7 +17,7 @@ const YBSAssemblyView = () => {
     }
     
     // Check if the HTML file exists by creating an image and catching 404s
-    const checkUrl = `/src/pages/YSB/${itemCode}.html`;
+    const checkUrl = `/src/pages/YBS/${itemCode}.html`;
     const img = new Image();
     img.onload = () => {
       // Although this shouldn't happen (trying to load HTML as image)
@@ -59,7 +59,7 @@ const YBSAssemblyView = () => {
         <h2 className="text-xl font-semibold text-red-700 mb-2">Error</h2>
         <p className="mb-4 text-red-600">{error}</p>
         <button 
-          onClick={() => navigate('/assembly/ysb')} 
+          onClick={() => navigate('/assembly/ybs')} 
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Return to Assembly List
@@ -72,7 +72,7 @@ const YBSAssemblyView = () => {
   return (
     <div className="w-full h-full">
       <iframe
-        src={`/src/pages/YSB/${itemCode}.html${location.search}`}
+        src={`/src/pages/YBS/${itemCode}.html${location.search}`}
         style={{
           width: '100%',
           height: 'calc(100vh - 64px)',

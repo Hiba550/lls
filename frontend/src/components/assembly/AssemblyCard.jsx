@@ -6,7 +6,7 @@ import Card from '../common/Card';
 const AssemblyCard = ({
   title,
   description,
-  type, // 'YSB' or 'RSM'
+  type, // 'YBS' or 'RSM'
   itemCode,
   thumbnailSrc,
   status = 'not-started', // 'not-started', 'in-progress', 'completed'
@@ -32,7 +32,7 @@ const AssemblyCard = ({
   };
   
   const typeStyles = {
-    'YSB': {
+    'YBS': {
       bg: 'bg-blue-600',
       hover: 'hover:bg-blue-700'
     },
@@ -106,7 +106,7 @@ const AssemblyCard = ({
 AssemblyCard.propTypes = {
   title: PropTypes.string.isRequired,
   description: PropTypes.string.isRequired,
-  type: PropTypes.oneOf(['YSB', 'RSM']).isRequired,
+  type: PropTypes.oneOf(['YBS', 'RSM']).isRequired,
   itemCode: PropTypes.string,
   thumbnailSrc: PropTypes.string,
   status: PropTypes.oneOf(['not-started', 'in-progress', 'completed']),

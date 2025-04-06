@@ -11,12 +11,12 @@ const WorkOrderDetail = () => {
   const [error, setError] = useState(null);
   const [selectedMachine, setSelectedMachine] = useState('');
   
-  // Machine options based on PCB type (YSB and RSM)
+  // Machine options based on PCB type (YBS and RSM)
   const machineOptions = {
-    YSB: [
-      { id: 'ysb-m1', name: 'YSB Machine 1' },
-      { id: 'ysb-m2', name: 'YSB Machine 2' },
-      { id: 'ysb-m3', name: 'YSB Machine 3' }
+    YBS: [
+      { id: 'ybs-m1', name: 'YBS Machine 1' },
+      { id: 'ybs-m2', name: 'YBS Machine 2' },
+      { id: 'ybs-m3', name: 'YBS Machine 3' }
     ],
     RSM: [
       { id: 'rsm-m1', name: 'RSM Machine 1' },
@@ -59,7 +59,7 @@ const WorkOrderDetail = () => {
   // Determine PCB type from item code
   const getPcbType = (itemCode) => {
     if (!itemCode) return null;
-    if (itemCode.includes('5YB') || itemCode.includes('YSB')) return 'YSB';
+    if (itemCode.includes('5YB') || itemCode.includes('YBS')) return 'YBS';
     if (itemCode.includes('5RS') || itemCode.includes('RSM')) return 'RSM';
     return null;
   };
@@ -203,7 +203,7 @@ const WorkOrderDetail = () => {
                 <span className="text-gray-600">PCB Type:</span>
                 <span className="font-medium">
                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    pcbType === 'YSB' 
+                    pcbType === 'YBS' 
                       ? 'bg-blue-100 text-blue-800' 
                       : pcbType === 'RSM' 
                       ? 'bg-green-100 text-green-800'

@@ -35,14 +35,49 @@ const WorkOrderAuth = ({
         }
 
         // Check if work order is valid for this PCB type
-        if (pcbType && workOrderData.pcb_type !== pcbType) {
+        // Check the PCB type if it's defined in the work order
+        if (pcbType && workOrderData.pcb_type && workOrderData.pcb_type !== pcbType) {
           toast.error(`Work order #${workOrderId} is for ${workOrderData.pcb_type}, not ${pcbType}`);
           navigate(redirectPath || '/work-orders');
           return;
         }
 
+        // If pcb_type isn't set, try to infer it from item_code or other properties
+        if (pcbType && !workOrderData.pcb_type) {
+          const itemCode = workOrderData.item_code || '';
+          const product = workOrderData.product || '';
+          const description = workOrderData.description || '';
+          
+          // For RSM type check - Enhanced with more identifiers
+          if (pcbType === 'RSM') {
+            // Check for any RSM-related identifiers
+            if (!(itemCode.includes('5RS') || 
+                 itemCode.includes('RSM') || 
+                 product.includes('RSM') ||
+                 description.includes('RSM') ||
+                 itemCode.includes('4RS') ||  // Include 4RS identifier
+                 (workOrderData.pcb_item_code && 
+                  (workOrderData.pcb_item_code.includes('RSM') || 
+                   workOrderData.pcb_item_code.startsWith('RS'))))) {
+              toast.error(`Work order #${workOrderId} does not appear to be for ${pcbType}`);
+              navigate(redirectPath || '/work-orders');
+              return;
+            }
+          }
+          
+          // For YBS type check
+          if (pcbType === 'YBS' && 
+              !(itemCode.includes('5YB') || 
+                itemCode.includes('YBS') ||
+                product.includes('YBS'))) {
+            toast.error(`Work order #${workOrderId} does not appear to be for ${pcbType}`);
+            navigate(redirectPath || '/work-orders');
+            return;
+          }
+        }
+
         // Check if work order is for this specific PCB item code
-        if (pcbItemCode && workOrderData.pcb_item_code !== pcbItemCode) {
+        if (pcbItemCode && workOrderData.pcb_item_code && workOrderData.pcb_item_code !== pcbItemCode) {
           toast.error(`Work order #${workOrderId} is not assigned to this PCB item code`);
           navigate(redirectPath || '/work-orders');
           return;

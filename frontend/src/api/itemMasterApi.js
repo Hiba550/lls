@@ -34,7 +34,7 @@ const MOCK_PCB_ITEMS = [
     item_code: 'YSB011056',
     name: 'YBS ILI DUCT ASSEMBLY - 24 spindles',
     cable_description: 'YBS POWER & COMMUNICATION CABLE ASSY - 1610mm - RR',
-    category: 'YSB',
+    category: 'YBS',
     spindle_count: 24
   },
   {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive YBS Machine Circuit Board Layout - 5YB011059 (Corrected Ranges)</title>
+    <title>RSM Assembly - 5RS011076</title>
     <style>
         :root {
             --left-pcb-color: #b5e6b5;
@@ -24,6 +24,11 @@
             --component-name-text: var(--text-color-dark);
             --tooltip-bg: rgba(54, 69, 79, 0.95);
             --tooltip-text: var(--text-color-light);
+            --status-success: #4caf50;
+            --status-error: #f44336;
+            --status-warning: #ff9800;
+            --status-info: #2196f3;
+            --slave-to-slave-cable: #ffd700;
         }
 
         * {
@@ -186,7 +191,7 @@
         }
 
         .left-pcb {
-            background-color: var(--left-pcb-color);
+            background-color: #ffffff;
             text-align: center;
             font-size: 0.7rem;
             font-weight: 500;
@@ -253,14 +258,14 @@
         }
 
         .board-to-board {
-            background-color: var(--board-to-board-color);
-            color: var(--text-color-light);
+            background-color: #ffffff;
+            color: var(--text-color-dark);
             text-align: center;
             font-size: 0.7rem;
             font-weight: 500;
             line-height: 1.2;
             vertical-align: middle;
-            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+            background-image: none;
             cursor: pointer;
         }
 
@@ -283,7 +288,7 @@
             font-size: 0.875rem;
             padding: 0.75rem 0.25rem;
             vertical-align: middle;
-            background-image: linear-gradient(to bottom, #f9f9f9, #ffffff);
+            background-image: none; /* Remove gradient background */
             cursor: pointer;
         }
 
@@ -428,7 +433,1033 @@
                 width: 5rem;
             }
         }
+
+        .cell.success {
+            background-color: var(--status-success) !important; /* Add !important to override any other styles */
+            color: white !important; /* Force text color to white */
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.6);
+            animation: successPulse 2s ease-in-out;
+            font-weight: 600; /* Make text bolder for better visibility */
+            text-shadow: 0 0 2px rgba(0, 0, 0, 0.5); /* Add text shadow for better contrast */
+        }
+
+        .cell.success, .power-cable.cell.success {
+            background-color: var(--status-success) !important;
+            color: white !important;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.6);
+            animation: successPulse 2s ease-in-out;
+            font-weight: 600;
+            text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes successPulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.8); }
+        }
+
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+
+        .cell.next {
+            background-color: var(--highlight-yellow);
+            animation: nextPulse 2s infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cell.next::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes nextPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0.7); }
+            70% { box-shadow: 0 0 10px 10px rgba(255, 235, 59, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0); }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .scan-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #f1f5f9;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+        }
+
+        .scan-input-container {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .scan-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+        }
+
+        .scan-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scan-button:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .scan-button:active {
+            transform: translateY(0);
+        }
+
+        .progress-container {
+            margin-bottom: 1rem;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-label {
+            font-weight: 600;
+        }
+
+        .progress-bar {
+            height: 0.75rem;
+            background-color: #e2e8f0;
+            border-radius: 0.375rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #3b82f6;
+            border-radius: 0.375rem;
+            transition: width 0.5s ease;
+        }
+
+        .logs-container {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-header {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.375rem;
+        }
+
+        .log-item {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .log-time {
+            color: #64748b;
+        }
+
+        .log-item.success .log-message {
+            color: #16a34a;
+        }
+
+        .log-item.error .log-message {
+            color: #dc2626;
+        }
+
+        .log-item.warning .log-message {
+            color: #ea580c;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 9999;
+            font-size: 0.95rem;
+            transform: translateY(20px);
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification.success {
+            background-color: #10b981;
+            color: white;
+            border-left: 5px solid #059669;
+        }
+
+        .notification.error {
+            background-color: #ef4444;
+            color: white;
+            border-left: 5px solid #b91c1c;
+        }
+
+        .notification.info {
+            background-color: #3b82f6;
+            color: white;
+            border-left: 5px solid #2563eb;
+        }
+
+        .notification.warning {
+            background-color: #f59e0b;
+            color: white;
+            border-left: 5px solid #d97706;
+        }
+
+        .complete-button {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .complete-button:hover {
+            background-color: #15803d;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .complete-button:active {
+            transform: translateY(0);
+        }
+
+        .complete-button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none;
+        }
     </style>
+    <script>
+        const API_URL = '/api';
+        let inventoryDataLoaded = false;
+        let apiConnected = false; // Add this line
+
+        // Define components with their item codes
+        const components = {
+            slave_1to3: "4RS013097",
+            slave_to_slave_pcb: "4RS013147",
+            pc_cable: "4RS013146"
+        };
+
+        const scanningCodes = {
+            slave_1to3: "",
+            slave_to_slave_pcb: "",
+            pc_cable: ""
+        };
+
+        // Component mapping for scanning interface
+        const componentMapping = {
+            "slave_pcb_1": {
+                itemCode: "4RS013097",
+                name: "Slave PCB 1",
+                element: null, // Will be set after DOM loads
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null, // Add this line
+                index: 1
+            },
+            "slave_pcb_2": {
+                itemCode: "4RS013097",
+                name: "Slave PCB 2",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                index: 2
+            },
+            "slave_pcb_3": {
+                itemCode: "4RS013097",
+                name: "Slave PCB 3",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                index: 3
+            },
+            "s2s_cable_1": {
+                itemCode: "4RS013147",
+                name: "Slave to Slave Cable 1",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                index: 4
+            },
+            "s2s_cable_2": {
+                itemCode: "4RS013147",
+                name: "Slave to Slave Cable 2",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                index: 5
+            },
+            "pc_cable": {
+                itemCode: "4RS013146",
+                name: "Power & Communication Cable",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                index: 6
+            }
+        };
+
+        // Keep track of scanned barcodes to prevent duplicates
+        let scannedBarcodes = new Set();
+        let barcodeInput = null;
+        let scanButton = null;
+        let completeButton = null;
+        let progressFill = null;
+        let progressPercentage = null;
+        let logsContent = null;
+
+        async function fetchVerificationCodesFromAPI() {
+            try {
+                console.log("Fetching verification codes from inventory API...");
+                addLogEntry("Attempting to connect to inventory API...", "info");
+                
+                // Create an array of promises for parallel fetching
+                let successCount = 0;
+                const fetchPromises = [];
+                
+                for (const [key, comp] of Object.entries(componentMapping)) {
+                    const fetchPromise = fetch(`${API_URL}/item-master/?search=${comp.itemCode}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Failed to fetch for ${comp.name}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data && data.length > 0) {
+                                // Note the key difference: Use data[0].code instead of data[0].verification_code
+                                comp.verificationCode = data[0].code || "";
+                                if (comp.verificationCode) {
+                                    successCount++;
+                                    return { success: true, key };
+                                }
+                            }
+                            return { success: false, key };
+                        })
+                        .catch(error => {
+                            console.error(`Error fetching data for ${key}:`, error);
+                            return { success: false, key, error };
+                        });
+                    
+                    fetchPromises.push(fetchPromise);
+                }
+                
+                // Wait for all fetch operations to complete
+                await Promise.all(fetchPromises);
+                
+                // Check if we had any successful API calls
+                apiConnected = successCount > 0;
+                
+                if (apiConnected && successCount > 0) {
+                    addLogEntry(`Connected to API. Loaded ${successCount} verification codes.`, 'success');
+                    showNotification('Verification codes loaded successfully', 'success');
+                    inventoryDataLoaded = true;
+                    
+                    // Add detailed logs for each component and its verification code
+                    addLogEntry('==== Component Verification Codes ====', 'info');
+                    Object.values(componentMapping).forEach(component => {
+                        const statusIcon = component.verificationCode ? '✓' : '✗';
+                        const codeInfo = component.verificationCode ? 
+                            `Position ${component.verificationCode.length === 1 ? '5' : component.verificationCode.length === 2 ? '5-6' : '5-7'}: ${component.verificationCode}` : 
+                            'No code loaded';
+                        addLogEntry(`${statusIcon} ${component.name} (${component.itemCode}): ${codeInfo}`, 
+                            component.verificationCode ? 'success' : 'error');
+                    });
+                    addLogEntry('================================', 'info');
+                    
+                    return true;
+                } else {
+                    throw new Error('Could not fetch verification codes from API');
+                }
+            } catch (error) {
+                console.error("Error fetching verification codes:", error);
+                
+                // Add fallback verification codes similar to 5RS011075.html
+                addLogEntry('Failed to connect to API. Using fallback codes.', 'warning');
+                showNotification('API connection failed. Using offline mode.', 'warning');
+                
+                // Set fallback verification codes for offline mode
+                Object.values(componentMapping).forEach(comp => {
+                    if (comp.itemCode === "4RS013097") comp.verificationCode = '7';  // Slave PCBs
+                    if (comp.itemCode === "4RS013147") comp.verificationCode = '5T'; // Slave to Slave
+                    if (comp.itemCode === "4RS013146") comp.verificationCode = '4R'; // Power Cable
+                });
+                
+                // Log the fallback codes
+                addLogEntry('==== Fallback Verification Codes ====', 'warning');
+                Object.values(componentMapping).forEach(component => {
+                    const statusIcon = component.verificationCode ? '✓' : '✗';
+                    const codeInfo = component.verificationCode ? 
+                        `Position ${component.verificationCode.length === 1 ? '5' : component.verificationCode.length === 2 ? '5-6' : '5-7'}: ${component.verificationCode}` : 
+                        'No code loaded';
+                    addLogEntry(`${statusIcon} ${component.name} (${component.itemCode}): ${codeInfo}`, 
+                        component.verificationCode ? 'success' : 'warning');
+                });
+                addLogEntry('================================', 'info');
+                
+                inventoryDataLoaded = true;
+                apiConnected = false;
+                return true; // Return true so assembly process can continue with fallback codes
+            }
+        }
+
+        async function initializeAssemblyProcess() {
+            // Initialize UI elements
+            setupUIElements();
+            
+            // Fetch verification codes
+            const success = await fetchVerificationCodesFromAPI();
+            
+            if (!success) {
+                addLogEntry('Cannot proceed: API connection failed. Contact IT Admin.', 'error');
+                return false; // Stop further execution if API failed
+            }
+
+            // Initialize the scanning process
+            highlightNextComponent();
+            return true;
+        }
+
+        function setupUIElements() {
+            // Get UI elements
+            barcodeInput = document.getElementById('barcodeInput');
+            scanButton = document.getElementById('scanButton');
+            completeButton = document.getElementById('completeButton');
+            const restartButton = document.getElementById('restartButton');
+            progressFill = document.getElementById('progressFill');
+            progressPercentage = document.getElementById('progressPercentage');
+            logsContent = document.getElementById('logsContent');
+            
+            // Set element references for component mapping
+            const pcbElements = document.querySelectorAll('.left-pcb');
+            componentMapping.slave_pcb_1.element = pcbElements[0];
+            componentMapping.slave_pcb_2.element = pcbElements[1];
+            componentMapping.slave_pcb_3.element = pcbElements[2];
+            
+            const boardToBoard = document.querySelectorAll('.board-to-board');
+            componentMapping.s2s_cable_1.element = boardToBoard[0];
+            componentMapping.s2s_cable_2.element = boardToBoard[1];
+            
+            // Make sure we're finding the correct power cable element
+            const powerCable = document.querySelector('.power-cable');
+            if (!powerCable) {
+                console.error('Power cable element not found!');
+                addLogEntry('Error: Power cable element not found in DOM', 'error');
+            }
+            componentMapping.pc_cable.element = powerCable;
+            
+            // Add event listeners
+            scanButton.addEventListener('click', function() {
+                const barcode = barcodeInput.value;
+                handleScan(barcode);
+                barcodeInput.value = '';
+                barcodeInput.focus();
+            });
+            
+            barcodeInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const barcode = barcodeInput.value;
+                    handleScan(barcode);
+                    barcodeInput.value = '';
+                }
+            });
+            
+            completeButton.addEventListener('click', function() {
+                completeAssembly();
+            });
+            
+            // Add this event listener
+            restartButton.addEventListener('click', function() {
+                restartAssembly();
+            });
+            
+            addLogEntry('Assembly system initialized', 'info');
+        }
+
+        // Function to show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification';
+            notification.classList.add(type);
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 300);
+            }, 3000);
+        }
+        
+        // Function to add log entry
+        function addLogEntry(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.classList.add('log-item', type);
+            logItem.innerHTML = `
+                <span class="log-time">${timestamp}</span>
+                <span class="log-message">${message}</span>
+            `;
+            
+            if (logsContent) {
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            } else {
+                console.log(`${type}: ${message}`);
+            }
+        }
+
+        // Function to update progress bar
+        function updateProgress() {
+            const totalItems = Object.keys(componentMapping).length;
+            let scannedCount = Object.values(componentMapping).filter(comp => comp.scanned).length;
+            
+            const progressPercent = Math.round((scannedCount / totalItems) * 100);
+            
+            progressFill.style.width = `${progressPercent}%`;
+            progressPercentage.textContent = `${progressPercent}%`;
+        }
+
+        // Function to highlight the next component to scan
+        function highlightNextComponent() {
+            // Clear existing highlights
+            Object.values(componentMapping).forEach(comp => {
+                if (comp.element) comp.element.classList.remove('next');
+            });
+
+            // Find the next component to scan
+            const nextComponent = Object.values(componentMapping)
+                .sort((a, b) => a.index - b.index)
+                .find(comp => !comp.scanned);
+
+            if (nextComponent && nextComponent.element) {
+                nextComponent.element.classList.add('next');
+                addLogEntry(`Next scan: ${nextComponent.name}`, 'info');
+            } else {
+                completeButton.classList.remove('hidden');
+                completeButton.disabled = false;
+                addLogEntry('All components scanned successfully! Click Complete to finish.', 'success');
+                showNotification('All components verified! Assembly complete.', 'success');
+            }
+        }
+
+        // Function to verify a barcode against the expected verification code
+        function verifyBarcodeFormat(barcode, verificationCode) {
+            if (!barcode || !verificationCode) return false;
+            
+            // Position-based verification logic:
+            // - If verification code is 1 digit: Match with position 5 (index 4)
+            // - If verification code is 2 digits: Match with positions 5-6 (index 4-5)
+            // - If verification code is 3 digits: Match with positions 5-7 (index 4-6)
+            
+            console.log(`Verifying barcode: ${barcode} against code: ${verificationCode}`);
+            
+            try {
+                // Ensure barcode is at least 7 characters long for 3-digit verification
+                if (barcode.length < 7 && verificationCode.length > barcode.length - 4) {
+                    console.log('Barcode too short for verification');
+                    return false;
+                }
+                
+                if (verificationCode.length === 1) {
+                    const match = barcode[4] === verificationCode;
+                    console.log(`1-digit check: Position 5 (${barcode[4]}) === ${verificationCode}: ${match}`);
+                    return match;
+                } else if (verificationCode.length === 2) {
+                    const slice = barcode.slice(4, 6);
+                    const match = slice === verificationCode;
+                    console.log(`2-digit check: Positions 5-6 (${slice}) === ${verificationCode}: ${match}`);
+                    return match;
+                } else if (verificationCode.length === 3) {
+                    const slice = barcode.slice(4, 7);
+                    const match = slice === verificationCode;
+                    console.log(`3-digit check: Positions 5-7 (${slice}) === ${verificationCode}: ${match}`);
+                    return match;
+                }
+                
+                // If verification code is longer than 3 digits, return false
+                console.log('Verification code format not supported');
+                return false;
+            } catch (error) {
+                console.error('Error during barcode verification:', error);
+                return false;
+            }
+        }
+
+        // Function to handle barcode scanning
+        function handleScan(barcode) {
+            if (!inventoryDataLoaded) {
+                showNotification('System not ready. Please wait or reload page.', 'error');
+                addLogEntry('System not ready. Verification codes not loaded.', 'error');
+                return;
+            }
+            
+            // Trim and validate the barcode input
+            barcode = barcode.trim();
+            if (!barcode) {
+                showNotification('Please scan a valid barcode', 'error');
+                return;
+            }
+            
+            // Check if this barcode has already been scanned - replace the existing check
+            if (isDuplicateBarcode(barcode)) {
+                // Add visual feedback - flash the component that was previously scanned with this barcode
+                let duplicatedComponent = null;
+                for (const component of Object.values(componentMapping)) {
+                    if (component.scannedBarcode === barcode) {
+                        duplicatedComponent = component;
+                        break;
+                    }
+                }
+                
+                if (duplicatedComponent && duplicatedComponent.element) {
+                    // Flash the already scanned component to indicate where the duplicate is
+                    duplicatedComponent.element.classList.add('error');
+                    setTimeout(() => {
+                        duplicatedComponent.element.classList.remove('error');
+                        duplicatedComponent.element.classList.add('success');
+                    }, 800);
+                }
+                
+                showNotification(`DUPLICATE BARCODE: ${barcode} has already been scanned!`, 'error');
+                addLogEntry(`Duplicate scan rejected: ${barcode}`, 'error');
+                
+                // Make the input field flash red as additional feedback
+                barcodeInput.style.backgroundColor = '#fee2e2';
+                setTimeout(() => {
+                    barcodeInput.style.backgroundColor = '';
+                }, 800);
+                
+                return;
+            }
+            
+            // Get the next component to scan
+            const nextComponent = Object.values(componentMapping)
+                .sort((a, b) => a.index - b.index)
+                .find(comp => !comp.scanned);
+            
+            if (!nextComponent) {
+                showNotification('All components have been scanned already', 'info');
+                addLogEntry('No more components to scan', 'info');
+                return;
+            }
+            
+            // Verify the barcode format
+            if (verifyBarcodeFormat(barcode, nextComponent.verificationCode)) {
+                // Mark component as scanned - replace this section
+                nextComponent.scanned = true;
+                nextComponent.scannedBarcode = barcode; // Add this line to store the barcode
+                nextComponent.element.classList.remove('next');
+                nextComponent.element.classList.add('success');
+                // Inside the IF block for successful verification:
+console.log(`Component ${nextComponent.name} marked as success`);
+console.log(`Element:`, nextComponent.element);
+console.log(`Classes: ${nextComponent.element.className}`);
+                
+                // Add to scanned barcodes set
+                scannedBarcodes.add(barcode);
+                
+                // Log success
+                addLogEntry(`${nextComponent.name} verified successfully: ${barcode}`, 'success');
+                showNotification(`${nextComponent.name} verified successfully!`, 'success');
+                
+                // Update progress
+                updateProgress();
+                
+                // Highlight next component
+                highlightNextComponent();
+            } else {
+                // Show error for incorrect barcode
+                nextComponent.element.classList.add('error');
+                setTimeout(() => {
+                    nextComponent.element.classList.remove('error');
+                    nextComponent.element.classList.add('next');
+                }, 1000);
+                
+                showNotification(`Invalid barcode for ${nextComponent.name}`, 'error');
+                addLogEntry(`Incorrect barcode for ${nextComponent.name}: ${barcode}`, 'error');
+            }
+        }
+
+        // Function to check if a barcode has already been scanned
+        function isDuplicateBarcode(barcode) {
+            // First check the Set of scanned barcodes
+            if (scannedBarcodes.has(barcode)) {
+                return true;
+            }
+            
+            // Also check if any component was already scanned with this barcode
+            for (const component of Object.values(componentMapping)) {
+                if (component.scannedBarcode === barcode) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Global variable to store assembly ID
+        let assemblyId = null;
+
+        // Function to get assembly ID from URL parameters
+        function getAssemblyId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            
+            if (id) {
+                // If found in URL, also save to localStorage for persistence
+                localStorage.setItem('currentRSMAssemblyId', id);
+                return id;
+            }
+            
+            // Fallback to localStorage if not in URL
+            return localStorage.getItem('currentRSMAssemblyId');
+        }
+
+        // Initialize assembly ID when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            assemblyId = getAssemblyId();
+        });
+
+        async function completeAssembly() {
+            // Check if all components are scanned
+            const allScanned = Object.values(componentMapping).every(comp => comp.scanned);
+            if (!allScanned) {
+                showNotification('Cannot complete: some components are not scanned', 'error');
+                return;
+            }
+            
+            if (!assemblyId) {
+                showNotification('Error: No assembly ID found', 'error');
+                completeButton.disabled = false;
+                return false;
+            }
+            
+            try {
+                // Show processing message
+                showNotification('Processing...', 'info');
+                addLogEntry('Completing assembly process...', 'info');
+                
+                // Prepare data for submission
+                const assemblyData = {
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                    notes: 'Assembly completed via RSM assembly interface',
+                    operator: 'Current User',
+                    metadata: {
+                        scanned_components: Array.from(scannedBarcodes).map((barcode, index) => ({
+                            component_id: `comp_${index}`,
+                            barcode: barcode,
+                            scan_time: new Date().toISOString()
+                        }))
+                    }
+                };
+                
+                // Make the API call with proper error handling
+                const response = await fetch(`/api/assembly-process/${assemblyId}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(assemblyData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to complete assembly: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Success - show notification and redirect
+                showNotification('Assembly completed successfully!', 'success');
+                addLogEntry('Assembly completed successfully!', 'success');
+                
+                // Clear localStorage on completion
+                localStorage.removeItem('currentRSMAssemblyId');
+                
+                // Offer to start a new assembly or return to list
+                setTimeout(() => {
+                    document.getElementById('mainContainer').innerHTML = `
+                        <div style="text-align: center; padding: 2rem">
+                            <h2 style="color: #16a34a; margin-bottom: 1rem">Assembly Completed Successfully!</h2>
+                            <p style="margin-bottom: 2rem">Assembly ID: ${assemblyId}</p>
+                            <div style="display: flex; gap: 1rem; justify-content: center">
+                                <button onclick="window.location.href='/assembly/rsm'"
+                                        style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                               border: none; border-radius: 0.375rem; cursor: pointer;">
+                                    Return to Assembly List
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }, 1000);
+                
+                return true;
+            } catch (error) {
+                console.error('Error completing assembly:', error);
+                showNotification(`Failed to complete assembly: ${error.message}`, 'error');
+                addLogEntry(`Error: ${error.message}`, 'error');
+                completeButton.disabled = false;
+                return false;
+            }
+        }
+
+        function showApiFailureMessage() {
+            const errorMessage = 'API connection failed. Please contact IT Admin.';
+            addLogEntry(errorMessage, 'error');
+            showNotification(errorMessage, 'error');
+            
+            // Get component codes for technical information
+            const componentItemCodes = {};
+            Object.entries(componentMapping).forEach(([key, component]) => {
+                componentItemCodes[key] = component.itemCode;
+            });
+            
+            // Display an error message in the UI
+            document.getElementById('mainContainer').innerHTML = `
+                <div style="text-align: center; padding: 2rem; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #dc2626; margin-bottom: 1.5rem">Connection Error</h2>
+                    <div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 2rem;">
+                        <p style="color: #b91c1c; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                            <strong>Unable to connect to the inventory system.</strong>
+                        </p>
+                        <p style="color: #b91c1c;">
+                            The assembly process cannot continue without verification codes from the server.
+                            Please contact your IT Administrator for assistance.
+                        </p>
+                    </div>
+                    <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 1rem; border-radius: 0.375rem; text-align: left;">
+                        <h3 style="color: #475569; font-size: 1rem; margin-bottom: 0.75rem;">Technical Information</h3>
+                        <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Error: Failed to retrieve verification codes from API</p>
+                        <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Component IDs:</p>
+                        <ul style="color: #475569; font-size: 0.9rem; margin-left: 1.5rem; margin-bottom: 1rem;">
+                            ${Object.entries(componentItemCodes).map(([key, code]) => `<li>${key}: ${code}</li>`).join('')}
+                        </ul>
+                        <p style="color: #475569; font-size: 0.9rem;">Please provide this information to IT support.</p>
+                    </div>
+                    <button onclick="window.location.reload()"
+                            style="margin-top: 2rem; background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                   border: none; border-radius: 0.375rem; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
+            
+            inventoryDataLoaded = false;
+        }
+
+        async function restartAssembly() {
+            if (confirm("Are you sure you want to restart this assembly? All current progress will be lost.")) {
+                try {
+                    // Clear local storage data for this assembly
+                    localStorage.removeItem('scannedBarcodes');
+                    
+                    // Reset UI
+                    document.querySelectorAll('.success, .next, .error').forEach(el => {
+                        el.classList.remove('success', 'next', 'error');
+                    });
+                    
+                    // Reset scanned barcodes
+                    scannedBarcodes = new Set();
+                    
+                    // Reset all component states
+                    Object.values(componentMapping).forEach(component => {
+                        component.scanned = false;
+                    });
+                    
+                    // Reset progress
+                    progressFill.style.width = '0%';
+                    progressPercentage.textContent = '0%';
+                    
+                    // Clear logs
+                    logsContent.innerHTML = '';
+                    
+                    // Hide complete button
+                    completeButton.classList.add('hidden');
+                    completeButton.disabled = true;
+                    
+                    // Reset the assembly state on the server if we have an ID
+                    if (assemblyId) {
+                        await fetch(`/api/assembly-process/${assemblyId}/`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                status: 'in_progress',
+                                metadata: {
+                                    scanned_components: []
+                                }
+                            })
+                        });
+                    }
+                    
+                    // Add new log entry
+                    addLogEntry('Assembly has been restarted', 'info');
+                    showNotification('Assembly has been restarted. Start scanning from beginning.', 'info');
+                    
+                    // Highlight the first component
+                    highlightNextComponent();
+                } catch (error) {
+                    console.error('Error restarting assembly:', error);
+                    showNotification(`Failed to restart assembly: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Original DOM loaded actions
+            const highlightedSensors = document.querySelectorAll('.highlighted-sensor');
+            highlightedSensors.forEach(sensor => {
+                sensor.classList.add('pulse');
+            });
+
+            const cells = document.querySelectorAll('.cell');
+            const tooltip = document.getElementById('tooltip');
+
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', function(e) {
+                    const tooltipText = this.getAttribute('data-tooltip');
+                    if (tooltipText) {
+                        tooltip.textContent = tooltipText;
+                        tooltip.classList.add('show');
+
+                        const rect = this.getBoundingClientRect();
+                        const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                        tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
+                        tooltip.style.top = rect.bottom + 10 + 'px';
+
+                        if (parseFloat(tooltip.style.left) < tableRect.left) {
+                            tooltip.style.left = tableRect.left + 'px';
+                        } else if (parseFloat(tooltip.style.left) + tooltip.offsetWidth > tableRect.right) {
+                            tooltip.style.left = tableRect.right - tooltip.offsetWidth + 'px';
+                        }
+                    }
+                });
+
+                cell.addEventListener('mouseleave', function() {
+                    tooltip.classList.remove('show');
+                });
+            });
+
+            const boardToBoard = document.querySelectorAll('.board-to-board');
+            const connectionLine1 = document.getElementById('connectionLine1');
+            const connectionLine2 = document.getElementById('connectionLine2');
+
+            const line1 = boardToBoard[0];
+            line1.addEventListener('mouseenter', function() {
+                const lineRect = line1.getBoundingClientRect();
+                const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                connectionLine1.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                connectionLine1.style.left = tableRect.left + 160 + 'px';
+                connectionLine1.style.width = '200px';
+
+                setTimeout(() => {
+                    connectionLine1.classList.add('active');
+                }, 50);
+            });
+
+            line1.addEventListener('mouseleave', function() {
+                connectionLine1.classList.remove('active');
+            });
+
+            const line2 = boardToBoard[1];
+            line2.addEventListener('mouseenter', function() {
+                const lineRect = line2.getBoundingClientRect();
+                const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                connectionLine2.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                connectionLine2.style.left = tableRect.left + 400 + 'px';
+                connectionLine2.style.width = '200px';
+
+                setTimeout(() => {
+                    connectionLine2.classList.add('active');
+                }, 50);
+            });
+
+            line2.addEventListener('mouseleave', function() {
+                connectionLine2.classList.remove('active');
+            });
+
+            setTimeout(() => {
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach(cell => {
+                    cell.style.transition = 'all 0.3s ease';
+                });
+            }, 500);
+
+            // Initialize the assembly process
+            initializeAssemblyProcess();
+        });
+    </script>
 </head>
 <body>
     <div class="container" id="mainContainer">
@@ -452,9 +1483,9 @@
             <tr>
                 <td class="component-name">Joining Cable</td>
                 <td class="cell empty-cell" colspan="6" style="transition: 0.3s;width: 59.6px;"></td>
-                <td class="cell board-to-board" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM" style="background-color: var(--slave-to-slave-cable); color: var(--text-color-dark);">Slave to Slave PCB <br>( 10-12) - 120MM</td>
+                <td class="cell board-to-board" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM">Slave to Slave PCB <br>( 10-12) - 120MM</td>
                 <td class="cell empty-cell" colspan="4" style="transition: 0.3s;width: 49.6px;"></td>
-                <td class="cell board-to-board" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM" style="background-color: var(--slave-to-slave-cable); color: var(--text-color-dark);">Slave to Slave PCB <br>( 10-12) - 120MM</td>
+                <td class="cell board-to-board" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM">Slave to Slave PCB <br>( 10-12) - 120MM</td>
                 <td class="cell empty-cell" colspan="2" style="transition: 0.3s;width: 49.6px;"></td>
             </tr>
             <tr>
@@ -466,6 +1497,46 @@
         <div id="tooltip" class="tooltip"></div>
         <div id="connectionLine1" class="connection-line"></div>
         <div id="connectionLine2" class="connection-line"></div>
+
+        <div class="scan-section">
+            <h2 class="text-xl font-semibold mb-4">Component Verification</h2>
+            
+            <div class="scan-input-container">
+                <input type="text" id="barcodeInput" class="scan-input" placeholder="Scan component barcode..." autofocus>
+                <button id="scanButton" class="scan-button">Verify</button>
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-header">
+                    <div class="progress-label">Assembly Progress</div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="logs-container">
+                <div class="log-header">Assembly Logs</div>
+                <div id="logsContent"></div>
+            </div>
+            
+            <button id="completeButton" class="complete-button hidden" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                Complete Assembly
+            </button>
+            <button id="restartButton" class="complete-button" style="background-color: #f59e0b; margin-bottom: 0.5rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 4v6h6"></path>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Restart Assembly
+            </button>
+        </div>
+        <div id="notification" class="notification"></div>
     </div>
 
     <script>

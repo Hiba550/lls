@@ -1,0 +1,22 @@
+from users.models import User
+
+# Option 1: Reactivate existing admin
+try:
+    admin = User.objects.get(email='admin@example.com')
+    admin.is_active = True
+    admin.set_password('admin123')  # Reset password
+    admin.save()
+    print(f"Admin user {admin.email} reactivated!")
+except User.DoesNotExist:
+    # Option 2: Create a new admin user
+    admin = User.objects.create_superuser(
+        email='admin@example.com',
+        password='admin123',
+        full_name='Admin User'
+    )
+    print(f"New admin user {admin.email} created!")
+
+# Verify user status
+print(f"User active status: {admin.is_active}")
+print(f"User is_staff: {admin.is_staff}")
+print(f"User is_superuser: {admin.is_superuser}")

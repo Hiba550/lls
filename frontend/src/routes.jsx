@@ -1,8 +1,10 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import NotFound from './components/NotFound';
 import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
 
 // Main pages
 import Assembly from './pages/Assembly';
@@ -12,9 +14,10 @@ import Settings from './pages/Settings';
 import WorkOrders from './pages/WorkOrders';
 import WorkOrderForm from './pages/WorkOrderForm';
 import WorkOrderManagement from './pages/WorkOrderManagement';
+import UserProfile from './pages/UserProfile'; // Add this import
 
 // Assembly pages
-import YSBAssemblyManager from './pages/YSBAssemblyManager';
+import YBSAssemblyManager from './pages/YBSAssemblyManager';
 import YBSAssemblyView from './components/YBSAssemblyView';
 import RSMAssemblyManager from './pages/RSMAssemblyManager';
 import RSMAssemblyView from './pages/RSMAssemblyView';
@@ -26,6 +29,23 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Protected Route component that requires authentication
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    // Redirect to the login page but save the current location
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children ? children : <Outlet />;
+};
+
 // Component to handle iframe with query parameters
 function YBSAssemblyIframe() {
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +54,7 @@ function YBSAssemblyIframe() {
   
   useEffect(() => {
     // Build URL with query parameters
-    setIframeUrl(`/src/pages/YSB/5YB011057.html${location.search}`);
+    setIframeUrl(`/src/pages/YBS/5YB011057.html${location.search}`);
   }, [location.search]);
 
   return (
@@ -63,56 +83,65 @@ function YBSAssemblyIframe() {
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Main Layout with Sidebar and Navbar */}
-      <Route path="/" element={<Layout />}>
-        {/* Dashboard */}
-        <Route index element={<Dashboard />} />
-        
-        {/* Assembly Routes */}
-        <Route path="assembly">
-          <Route index element={<Assembly />} />
-          <Route path="ysb">
-            <Route index element={<YSBAssemblyManager />} />
-            <Route path=":itemCode" element={<YBSAssemblyView />} />
+      {/* Public routes */}
+      <Route path="/login" element={<Login />} />
+
+      {/* Protected routes - require authentication */}
+      <Route element={<ProtectedRoute />}>
+        {/* Main Layout with Sidebar and Navbar */}
+        <Route path="/" element={<Layout />}>
+          {/* Dashboard */}
+          <Route index element={<Dashboard />} />
+          
+          {/* Assembly Routes */}
+          <Route path="assembly">
+            <Route index element={<Assembly />} />
+            <Route path="YBS">
+              <Route index element={<YBSAssemblyManager />} />
+              <Route path=":itemCode" element={<YBSAssemblyView />} />
+            </Route>
+            <Route path="rsm">
+              <Route index element={<RSMAssemblyManager />} />
+              <Route path=":itemCode" element={<RSMAssemblyView />} />
+            </Route>
           </Route>
-          <Route path="rsm">
-            <Route index element={<RSMAssemblyManager />} />
-            <Route path=":itemCode" element={<RSMAssemblyView />} />
+          
+          {/* Inventory Routes */}
+          <Route path="inventory">
+            <Route index element={<Inventory />} />
+            <Route path="parts" element={<Inventory type="parts" />} />
+            <Route path="components" element={<Inventory type="components" />} />
+            <Route path="stock" element={<Inventory type="stock" />} />
           </Route>
+          
+          {/* Work Orders Routes */}
+          <Route path="work-orders">
+            <Route index element={<WorkOrders />} />
+            <Route path="create" element={<WorkOrderForm />} />
+            <Route path="edit/:id" element={<WorkOrderForm />} />
+            <Route path="manage" element={<WorkOrderManagement />} />
+          </Route>
+          
+          {/* Reports Routes */}
+          <Route path="reports">
+            <Route index element={<Reports />} />
+            <Route path="production" element={<Reports type="production" />} />
+            <Route path="quality" element={<Reports type="quality" />} />
+            <Route path="efficiency" element={<Reports type="efficiency" />} />
+          </Route>
+          
+          {/* Settings */}
+          <Route path="settings" element={<Settings />} />
+          
+          {/* Search Results */}
+          <Route path="search" element={<WorkOrders isSearchResults={true} />} />
+
+          {/* User Profile */}
+          <Route path="profile" element={<UserProfile />} />
+          
+          {/* Fallback for unmatched routes in the main layout */}
+          <Route path="*" element={<NotFound />} />
         </Route>
-        
-        {/* Inventory Routes */}
-        <Route path="inventory">
-          <Route index element={<Inventory />} />
-          <Route path="parts" element={<Inventory type="parts" />} />
-          <Route path="components" element={<Inventory type="components" />} />
-          <Route path="stock" element={<Inventory type="stock" />} />
-        </Route>
-        
-        {/* Work Orders Routes */}
-        <Route path="work-orders">
-          <Route index element={<WorkOrders />} />
-          <Route path="create" element={<WorkOrderForm />} />
-          <Route path="edit/:id" element={<WorkOrderForm />} />
-          <Route path="manage" element={<WorkOrderManagement />} />
-        </Route>
-        
-        {/* Reports Routes */}
-        <Route path="reports">
-          <Route index element={<Reports />} />
-          <Route path="production" element={<Reports type="production" />} />
-          <Route path="quality" element={<Reports type="quality" />} />
-          <Route path="efficiency" element={<Reports type="efficiency" />} />
-        </Route>
-        
-        {/* Settings */}
-        <Route path="settings" element={<Settings />} />
-        
-        {/* Search Results */}
-        <Route path="search" element={<WorkOrders isSearchResults={true} />} />
-        
-        {/* Fallback for unmatched routes in the main layout */}
-        <Route path="*" element={<NotFound />} />
       </Route>
       
       {/* Redirect legacy paths */}

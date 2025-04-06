@@ -19,7 +19,7 @@ def create_demo_workorders():
     if not demo_2_exists:
         # Try to get a PCB type, or create one if needed
         pcb_type, _ = PCBType.objects.get_or_create(
-            code="YSB",
+            code="YBS",
             defaults={
                 "name": "Yarn Breaking System",
                 "prefix": "5YB",
@@ -33,9 +33,9 @@ def create_demo_workorders():
             product="YBS-2023-DEMO",
             item_code="5YB011999",
             pcb_type=pcb_type,
-            description="Demo work order for YSB assembly",
+            description="Demo work order for YBS assembly",
             quantity=5,
-            machine_no="YSB-TEST-01",
+            machine_no="YBS-TEST-01",
             customer_name="Demo Customer",
             target_date=date.today() + timedelta(days=14),
             released_by="System",

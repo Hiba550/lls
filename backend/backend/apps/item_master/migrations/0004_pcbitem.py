@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
                 ('item_code', models.CharField(max_length=50, unique=True)),
                 ('name', models.CharField(max_length=255)),
                 ('cable_description', models.CharField(max_length=255)),
-                ('category', models.CharField(choices=[('YSB', 'YSB'), ('RSM', 'RSM')], max_length=10)),
+                ('category', models.CharField(choices=[('YBS', 'YBS'), ('RSM', 'RSM')], max_length=10)),
                 ('spindle_count', models.IntegerField(blank=True, null=True)),
                 ('pitch', models.CharField(blank=True, max_length=30, null=True)),
                 ('is_active', models.BooleanField(default=True)),

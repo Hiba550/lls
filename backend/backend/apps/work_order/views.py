@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class PCBTypeViewSet(viewsets.ModelViewSet):
     """
-    API endpoint for managing PCB types (YSB, RSM)
+    API endpoint for managing PCB types (YBS, RSM)
     """
     queryset = PCBType.objects.all()
     serializer_class = PCBTypeSerializer
@@ -73,8 +73,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             )
         
         # Find work orders with matching PCB type code or item code prefix
-        if pcb_type.lower() == 'ysb':
-            queryset = self.queryset.filter(pcb_type__code='YSB') | self.queryset.filter(item_code__startswith='5YB')
+        if pcb_type.lower() == 'ybs':
+            queryset = self.queryset.filter(pcb_type__code='YBS') | self.queryset.filter(item_code__startswith='5YB')
         elif pcb_type.lower() == 'rsm':
             queryset = self.queryset.filter(pcb_type__code='RSM') | self.queryset.filter(item_code__startswith='5RS')
         else:
@@ -99,7 +99,7 @@ def test_connection(request):
 @api_view(['POST'])
 def initialize_pcb_types(request):
     """
-    Initialize the database with default PCB types (YSB and RSM)
+    Initialize the database with default PCB types (YBS and RSM)
     """
     # Check if PCB types already exist
     if PCBType.objects.count() > 0:
@@ -108,9 +108,9 @@ def initialize_pcb_types(request):
     # Create default PCB types
     pcb_types = [
         {
-            "code": "YSB",
+            "code": "YBS",
             "name": "Yamaha System Board",
-            "description": "YSB PCB for Yamaha keyboard and audio equipment",
+            "description": "YBS PCB for Yamaha keyboard and audio equipment",
             "prefix": "5YB",
             "active": True
         },

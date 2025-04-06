@@ -24,7 +24,7 @@ const YSBAssemblyView = ({ workOrder }) => {
     }
     
     // Create and append iframe with the appropriate HTML file
-    const container = document.getElementById('ysb-assembly-container');
+    const container = document.getElementById('ybs-assembly-container');
     if (!container) {
       setError('Assembly container not found');
       setLoading(false);
@@ -39,7 +39,7 @@ const YSBAssemblyView = ({ workOrder }) => {
     iframe.style.width = '100%';
     iframe.style.height = 'calc(100vh - 4rem)';
     iframe.style.border = 'none';
-    iframe.src = `/src/pages/YSB/${itemCode}.html?id=${assemblyId || ''}&workOrderId=${workOrderId || ''}`;
+    iframe.src = `/src/pages/YBS/${itemCode}.html?id=${assemblyId || ''}&workOrderId=${workOrderId || ''}`;
     
     iframe.onload = () => {
       setLoading(false);
@@ -81,7 +81,7 @@ const YSBAssemblyView = ({ workOrder }) => {
         <h2 className="text-xl font-bold mb-2">Error</h2>
         <p>{error}</p>
         <button 
-          onClick={() => navigate('/assembly/ysb')}
+          onClick={() => navigate('/assembly/ybs')}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
           Return to Assembly Manager
@@ -91,7 +91,7 @@ const YSBAssemblyView = ({ workOrder }) => {
   }
   
   return (
-    <div id="ysb-assembly-container" className="w-full h-full">
+    <div id="ybs-assembly-container" className="w-full h-full">
       {workOrder && (
         <div className="bg-blue-50 border-b border-blue-200 p-2 text-sm">
           <div className="container mx-auto">
@@ -115,9 +115,9 @@ const YSBAssemblyViewWithAuth = () => {
   return (
     <WorkOrderAuth
       workOrderId={workOrderId}
-      pcbType="YSB"
+      pcbType="YBS"
       pcbItemCode={itemCode}
-      redirectPath="/assembly/ysb"
+      redirectPath="/assembly/ybs"
     >
       <YSBAssemblyView />
     </WorkOrderAuth>

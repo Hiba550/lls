@@ -29,7 +29,7 @@ class ItemMaster(models.Model):
 class PCBItem(models.Model):
     """Model to represent PCB items with their cable descriptions"""
     CATEGORY_CHOICES = [
-        ('YSB', 'YSB'),
+        ('YBS', 'YBS'),
         ('RSM', 'RSM'),
     ]
     
@@ -46,8 +46,8 @@ class PCBItem(models.Model):
     
     def save(self, *args, **kwargs):
         # Determine category based on item_code
-        if self.item_code.startswith('YSB'):
-            self.category = 'YSB'
+        if self.item_code.startswith('YBS'):
+            self.category = 'YBS'
         elif self.item_code.startswith('RSM'):
             self.category = 'RSM'
         super().save(*args, **kwargs)

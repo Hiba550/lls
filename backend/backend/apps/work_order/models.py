@@ -1,7 +1,7 @@
 from django.db import models
 
 class PCBType(models.Model):
-    """Model to define PCB types (YSB, RSM)"""
+    """Model to define PCB types (YBS, RSM)"""
     code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=50)
     description = models.TextField(blank=True, null=True)
@@ -15,7 +15,7 @@ class PCBType(models.Model):
 
 
 class WorkOrder(models.Model):
-    product = models.CharField(max_length=50)
+    product = models.CharField(max_length=300)  # Changed from 50 to 300
     item_code = models.CharField(max_length=50)
     pcb_type = models.ForeignKey(
         PCBType, 

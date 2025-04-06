@@ -17,7 +17,7 @@ export const tokens = {
         700: '#1b5e20',
       }
     },
-    // Component-specific colors from your YSB and RSM pages
+    // Component-specific colors from your YBS and RSM pages
     components: {
       leftPcb: '#ff6b6b',
       masterPcb: '#51cf66',

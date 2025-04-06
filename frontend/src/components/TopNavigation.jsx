@@ -1,147 +1,191 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../context/ThemeContext';
-
-const TopNavigation = ({ companyName = "Assembly Management" }) => {
+import { handleLogout } from '../api/userApi'; // Import the logout function
+import { toast } from 'react-toastify';  // or your toast library
+// Performance optimized version of TopNavigation
+// Uses React.memo and useCallback to prevent unnecessary re-renders
+const TopNavigation = memo(({ companyName = "Assembly Management" }) => {
+  // State management
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState(null);
+  // Add state for logout process
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  // Add state for current user
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  // Refs for click outside detection
   const userDropdownRef = useRef(null);
   const notificationRef = useRef(null);
+  const navigationRef = useRef(null);
+  
+  // Hooks
   const location = useLocation();
   const navigate = useNavigate();
   const { darkMode, toggleDarkMode } = useTheme();
   
-  // Close dropdowns when clicking outside
+  // Close dropdowns when clicking outside - optimized with useCallback
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Close user dropdown if clicked outside
       if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
         setUserDropdownOpen(false);
       }
+      
+      // Close notifications if clicked outside
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setNotificationsOpen(false);
       }
-      // Only close active submenu if clicking outside of any nav item
+      
+      // Close mobile menu if clicked outside navigation area
+      if (navigationRef.current && 
+          !navigationRef.current.contains(event.target) && 
+          !event.target.closest('.mobile-menu-button')) {
+        setMobileMenuOpen(false);
+      }
+      
+      // Close active submenu if clicking outside of any nav item
       if (!event.target.closest('.nav-item-with-submenu')) {
         setActiveSubmenu(null);
       }
     };
     
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle navigation and keep appropriate submenu open
+  // Handle route change - close mobile menu
   useEffect(() => {
     setMobileMenuOpen(false);
     
-    // Check if current path matches any submenu path
+    // Set active submenu based on current path
     const currentPath = location.pathname;
-    
-    // Set the active submenu based on the current path
     menuItems.forEach(item => {
-      if (item.hasSubmenu && item.submenu.some(sub => {
-        return currentPath === sub.path || currentPath.startsWith(`${sub.path}/`);
-      })) {
+      if (item.hasSubmenu && 
+          item.submenu.some(sub => currentPath === sub.path || currentPath.startsWith(`${sub.path}/`))) {
         setActiveSubmenu(item.id);
       }
     });
-    
-    // The key fix - Don't reset activeSubmenu when on a submenu page
-    // Previously this was causing the "Create Work Order" tab to disappear
   }, [location.pathname]);
 
-  // Handle search
-  const handleSearch = (e) => {
+  // Handler functions - memoized with useCallback for performance
+  const handleSearch = useCallback((e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
       setSearchQuery('');
     }
-  };
+  }, [searchQuery, navigate]);
 
-  // Toggle functions
-  const toggleUserDropdown = () => {
-    setUserDropdownOpen(!userDropdownOpen);
-    if (notificationsOpen) setNotificationsOpen(false);
-  };
+  const toggleUserDropdown = useCallback(() => {
+    setUserDropdownOpen(prev => !prev);
+    setNotificationsOpen(false);
+  }, []);
   
-  const toggleNotifications = () => {
-    setNotificationsOpen(!notificationsOpen);
-    if (userDropdownOpen) setUserDropdownOpen(false);
-  };
+  const toggleNotifications = useCallback(() => {
+    setNotificationsOpen(prev => !prev);
+    setUserDropdownOpen(false);
+  }, []);
 
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-  };
+  const toggleMobileMenu = useCallback(() => {
+    setMobileMenuOpen(prev => !prev);
+  }, []);
 
-  const toggleSubmenu = (menuId) => {
-    setActiveSubmenu(activeSubmenu === menuId ? null : menuId);
-  };
+  const toggleSubmenu = useCallback((menuId) => {
+    setActiveSubmenu(prevActive => prevActive === menuId ? null : menuId);
+  }, []);
 
   // Handle submenu item click
-  const handleSubmenuItemClick = (path) => {
+  const handleSubmenuItemClick = useCallback((path) => {
     navigate(path);
-    // Keep submenu open after navigation - the useEffect will handle this
-  };
+  }, [navigate]);
+
+  // Add a wrapper function for handling logout
+  const onLogout = useCallback(async () => {
+    try {
+      setIsLoggingOut(true);
+      await handleLogout();
+      // handleLogout will handle the redirect
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setIsLoggingOut(false);
+      toast.error("Logout failed. Please try again.");
+    }
+  }, []);
+
+  // Load user info on component mount
+  useEffect(() => {
+    const userJSON = localStorage.getItem('user');
+    if (userJSON) {
+      try {
+        const userData = JSON.parse(userJSON);
+        setCurrentUser(userData);
+      } catch (e) {
+        console.error("Failed to parse user data:", e);
+      }
+    }
+  }, []);
+
+  // Function to get user initials for avatar
+  const getUserInitials = useCallback(() => {
+    if (!currentUser) return "U";
+    
+    if (currentUser.full_name) {
+      const nameParts = currentUser.full_name.split(' ');
+      if (nameParts.length > 1) {
+        return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
+      }
+      return currentUser.full_name[0].toUpperCase();
+    }
+    
+    return currentUser.email ? currentUser.email[0].toUpperCase() : "U";
+  }, [currentUser]);
 
   // Mock notifications - In a production app, these would come from an API
   const notifications = [
     { 
       id: 1, 
       type: 'alert', 
-      title: 'Quality alert: RSM unit #307',
-      message: 'Inspection required for RSM assembly #307', 
-      time: '3 minutes ago',
+      title: 'QA: RSM unit #307',
+      message: 'Inspection required', 
+      time: '3m ago',
       read: false
     },
     { 
       id: 2, 
       type: 'success', 
-      title: 'Work order #1234 completed',
-      message: 'Assembly process finished successfully', 
-      time: '1 hour ago',
+      title: 'WO #1234 completed',
+      message: 'Assembly successful', 
+      time: '1h ago',
       read: false 
     },
     { 
       id: 3, 
       type: 'info', 
-      title: 'New RSM assembly scheduled',
-      message: 'New assembly task assigned to production line', 
-      time: '2 hours ago',
+      title: 'New RSM scheduled',
+      message: 'Production line task assigned', 
+      time: '2h ago',
       read: true 
     }
   ];
 
-  // Menu items with nested structure
+  // Simplified menu items structure
   const menuItems = [
     { 
       id: 'dashboard', 
       label: 'Dashboard', 
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-        </svg>
-      ),
       path: '/' 
     },
     { 
       id: 'work-orders', 
       label: 'Work Orders', 
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-        </svg>
-      ),
       path: '/work-orders',
       hasSubmenu: true,
       submenu: [
-        { id: 'all-orders', label: 'All Work Orders', path: '/work-orders' },
+        { id: 'all-orders', label: 'All Orders', path: '/work-orders' },
         { id: 'create-order', label: 'Create Order', path: '/work-orders/create' },
         { id: 'orders-management', label: 'Manage Orders', path: '/work-orders/manage' }
       ]
@@ -149,45 +193,29 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
     { 
       id: 'assembly', 
       label: 'Assembly',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-        </svg>
-      ),
       path: '/assembly',
       hasSubmenu: true,
       submenu: [
         { id: 'assembly-dashboard', label: 'Assembly Dashboard', path: '/assembly' },
-        { id: 'ysb-assembly', label: 'YSB Assembly', path: '/assembly/ysb' },
+        { id: 'ybs-assembly', label: 'YBS Assembly', path: '/assembly/ybs' },
         { id: 'rsm-assembly', label: 'RSM Assembly', path: '/assembly/rsm' }
       ]
     },
     { 
       id: 'inventory', 
       label: 'Inventory',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-        </svg>
-      ),
       path: '/inventory',
       hasSubmenu: true,
       submenu: [
-        { id: 'inventory-dashboard', label: 'Inventory Dashboard', path: '/inventory' },
+        { id: 'inventory-dashboard', label: 'Overview', path: '/inventory' },
         { id: 'parts-inventory', label: 'Parts', path: '/inventory/parts' },
         { id: 'components', label: 'Components', path: '/inventory/components' },
-        { id: 'stock-management', label: 'Stock Management', path: '/inventory/stock' }
+        { id: 'stock-management', label: 'Stock', path: '/inventory/stock' }
       ]
     },
     { 
       id: 'reports', 
       label: 'Reports',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clipRule="evenodd" />
-        </svg>
-      ),
       path: '/reports',
       hasSubmenu: true,
       submenu: [
@@ -199,74 +227,26 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
     { 
       id: 'settings', 
       label: 'Settings', 
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-        </svg>
-      ),
       path: '/settings' 
     }
   ];
   
-  // Animation variants
-  const dropdownVariants = {
-    hidden: { 
-      opacity: 0,
-      y: -5,
-      scale: 0.95,
-      transition: {
-        duration: 0.2,
-        ease: 'easeInOut'
-      }
-    },
-    visible: { 
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.2,
-        ease: 'easeOut'
-      }
-    }
-  };
-
-  const mobileMenuVariants = {
-    hidden: {
-      opacity: 0,
-      height: 0,
-      transition: {
-        duration: 0.3,
-        ease: 'easeInOut'
-      }
-    },
-    visible: {
-      opacity: 1,
-      height: 'auto',
-      transition: {
-        duration: 0.3,
-        ease: 'easeOut'
-      }
-    }
-  };
-  
-  // Determine if a menu item should be active based on path
-  const isActiveMenuItem = (item) => {
+  // Helper functions for menu item state
+  const isActiveMenuItem = useCallback((item) => {
     if (!item.hasSubmenu) {
       return location.pathname === item.path;
     } else {
-      // If it's a parent with submenu, it's active if any of its children are active
       return item.submenu.some(subItem => 
         location.pathname === subItem.path || location.pathname.startsWith(`${subItem.path}/`)
       );
     }
-  };
+  }, [location.pathname]);
   
-  // Determine if a submenu item should be active
-  const isActiveSubmenuItem = (path) => {
+  const isActiveSubmenuItem = useCallback((path) => {
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
-  };
+  }, [location.pathname]);
   
-  // Initialize activeSubmenu when page loads if we're on a submenu path
+  // Initialize activeSubmenu on page load
   useEffect(() => {
     menuItems.forEach(item => {
       if (item.hasSubmenu && item.submenu.some(sub => 
@@ -277,18 +257,65 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
     });
   }, []);
   
+  // Icons for menu items - simplified and consistent
+  const getIcon = (id) => {
+    switch(id) {
+      case 'dashboard':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4z" />
+            <path d="M3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6z" />
+            <path d="M14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+          </svg>
+        );
+      case 'work-orders':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'assembly':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z" />
+          </svg>
+        );
+      case 'inventory':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'reports':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'settings':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+          </svg>
+        );
+      default:
+        return null;
+    }
+  };
+  
   return (
-    <div className="sticky top-0 z-40 w-full">
-      <header className="bg-white dark:bg-neutral-900 shadow-md border-b border-neutral-200 dark:border-neutral-700 transition-colors duration-150 ease-in-out">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6">
-          <div className="flex justify-between items-center py-3 md:space-x-10">
+    <div className="sticky top-0 z-40 w-full print:hidden">
+      <header className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="max-w-screen-2xl mx-auto">
+          <div className="flex justify-between items-center py-2 px-3 h-14">
             {/* Logo/Brand */}
             <div className="flex justify-start lg:w-0 lg:flex-1">
               <Link to="/" className="flex items-center">
-                <div className="h-10 w-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-md flex items-center justify-center text-white font-bold shadow-sm shadow-primary-500/10">
-                  <span className="text-lg">AM</span>
+                <div className="h-8 w-8 bg-blue-600 dark:bg-blue-700 flex items-center justify-center text-white font-bold">
+                  <span className="text-sm">AM</span>
                 </div>
-                <span className="ml-3 text-lg font-bold text-neutral-800 dark:text-white hidden sm:block">
+                <span className="ml-2 text-base font-medium text-neutral-800 dark:text-white hidden sm:block">
                   {companyName}
                 </span>
               </Link>
@@ -299,106 +326,105 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
               <button 
                 type="button" 
                 onClick={toggleMobileMenu}
-                className="inline-flex items-center justify-center p-2 rounded-md text-neutral-400 dark:text-neutral-300 hover:text-neutral-500 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="inline-flex items-center justify-center p-2 rounded-md text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 mobile-menu-button"
                 aria-expanded="false"
               >
                 <span className="sr-only">Open menu</span>
-                <svg className={`${mobileMenuOpen ? 'hidden' : 'block'} h-6 w-6`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                <svg className={`${mobileMenuOpen ? 'block' : 'hidden'} h-6 w-6`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                {mobileMenuOpen ? (
+                  <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
               </button>
             </div>
             
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex space-x-2">
+            <nav className="hidden md:flex space-x-1" ref={navigationRef}>
               {menuItems.map((item) => (
-                <div key={item.id} className={`relative nav-item-with-submenu group ${item.hasSubmenu ? 'has-submenu' : ''}`}>
+                <div key={item.id} className={`relative nav-item-with-submenu ${item.hasSubmenu ? 'has-submenu' : ''}`}>
                   {item.hasSubmenu ? (
                     <button 
                       onClick={() => toggleSubmenu(item.id)} 
-                      className={`flex items-center rounded-lg px-3 py-2.5 font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 text-sm ${isActiveMenuItem(item) || activeSubmenu === item.id ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-600 dark:text-neutral-300'}`}
+                      className={`flex items-center px-2 py-2 text-sm font-medium ${
+                        isActiveMenuItem(item) || activeSubmenu === item.id 
+                          ? 'text-blue-600 dark:text-blue-400' 
+                          : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-800 dark:hover:text-white'
+                      }`}
                     >
-                      <span className={`mr-2 ${isActiveMenuItem(item) || activeSubmenu === item.id ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-500 dark:text-neutral-400'}`}>
-                        {item.icon}
-                      </span>
+                      <span className="mr-1.5">{getIcon(item.id)}</span>
                       {item.label}
-                      <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ml-1 transition-transform ${activeSubmenu === item.id ? 'transform rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ml-0.5 transition-transform ${activeSubmenu === item.id ? 'transform rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
                   ) : (
                     <NavLink 
                       to={item.path} 
-                      className={({ isActive }) => `flex items-center rounded-lg px-3 py-2.5 font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 text-sm ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-600 dark:text-neutral-300'}`}
+                      className={({ isActive }) => `flex items-center px-2 py-2 text-sm font-medium ${
+                        isActive ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-800 dark:hover:text-white'
+                      }`}
                     >
-                      <span className="mr-2">
-                        {item.icon}
-                      </span>
+                      <span className="mr-1.5">{getIcon(item.id)}</span>
                       {item.label}
                     </NavLink>
                   )}
                   
                   {/* Submenu for desktop */}
-                  {item.hasSubmenu && (
-                    <AnimatePresence>
-                      {activeSubmenu === item.id && (
-                        <motion.div 
-                          initial="hidden" 
-                          animate="visible" 
-                          exit="hidden" 
-                          variants={dropdownVariants}
-                          className="absolute left-0 mt-1 w-48 origin-top-right rounded-md bg-white dark:bg-neutral-800 shadow-lg ring-1 ring-neutral-200 dark:ring-neutral-700 focus:outline-none z-40"
-                        >
-                          <div className="py-1">
-                            {item.submenu.map((subItem) => (
-                              <button 
-                                key={subItem.id} 
-                                onClick={() => handleSubmenuItemClick(subItem.path)} 
-                                className={`block w-full text-left px-4 py-2 text-sm ${isActiveSubmenuItem(subItem.path) ? 'text-primary-600 dark:text-primary-400 bg-neutral-50 dark:bg-neutral-700/50 font-medium' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700'}`}
-                              >
-                                {subItem.label}
-                              </button>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                  {item.hasSubmenu && activeSubmenu === item.id && (
+                    <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-neutral-800 shadow-md border border-neutral-200 dark:border-neutral-700 z-40">
+                      <div className="py-1">
+                        {item.submenu.map((subItem) => (
+                          <button 
+                            key={subItem.id} 
+                            onClick={() => handleSubmenuItemClick(subItem.path)} 
+                            className={`block w-full text-left px-4 py-2 text-sm ${
+                              isActiveSubmenuItem(subItem.path) 
+                                ? 'text-blue-600 dark:text-blue-400 bg-neutral-50 dark:bg-neutral-700 font-medium' 
+                                : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
+                            }`}
+                          >
+                            {subItem.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               ))}
             </nav>
             
             {/* Right side - Search, Theme Toggle, Notifications, User */}
-          <div className="flex items-center space-x-3 ml-auto lg:ml-0">
-            {/* Search - Hidden on small screens */}
-            <div className="hidden md:block relative w-full max-w-xs">
-              <form onSubmit={handleSearch}>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <svg className="w-4 h-4 text-neutral-400 dark:text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" />
-                    </svg>
-                  </span>
-                  <input
-                    className="w-full form-input pl-10 py-1.5 text-sm h-9 rounded-full bg-neutral-100 dark:bg-neutral-700 border-none focus:ring-2 focus:ring-primary-500 shadow-inner"
-                    type="text"
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    aria-label="Search"
-                  />
-                </div>
-              </form>
-            </div>
+            <div className="flex items-center space-x-2 ml-auto lg:ml-0">
+              {/* Search - Hidden on small screens */}
+              <div className="hidden md:block relative w-full max-w-xs">
+                <form onSubmit={handleSearch}>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                      <svg className="w-4 h-4 text-neutral-400 dark:text-neutral-500" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </span>
+                    <input
+                      className="w-full py-1 pl-8 pr-3 text-sm h-8 rounded bg-neutral-100 dark:bg-neutral-800 border-none focus:ring-1 focus:ring-blue-500"
+                      type="text"
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label="Search"
+                    />
+                  </div>
+                </form>
+              </div>
               
               {/* Dark Mode Toggle */}
               <button
                 onClick={toggleDarkMode}
                 type="button"
-                className="flex items-center justify-center rounded-full p-2 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-neutral-900"
+                className="p-1.5 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md"
                 aria-label="Toggle Dark Mode"
               >
                 {darkMode ? (
@@ -417,95 +443,87 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
                 <button 
                   onClick={toggleNotifications}
                   type="button" 
-                  className="flex items-center justify-center rounded-full p-2 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" 
+                  className="p-1.5 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md" 
                   aria-label="Notifications"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
                   </svg>
                   {notifications.some(n => !n.read) && (
-                    <span className="absolute top-0 right-0.5 block h-2 w-2 rounded-full bg-red-500"></span>
+                    <span className="absolute top-0.5 right-0.5 block h-2 w-2 rounded-full bg-red-500"></span>
                   )}
                 </button>
                 
                 {/* Notification Dropdown */}
-                <AnimatePresence>
-                  {notificationsOpen && (
-                    <motion.div 
-                      initial="hidden" 
-                      animate="visible" 
-                      exit="hidden" 
-                      variants={dropdownVariants}
-                      className="absolute right-0 mt-1 w-80 origin-top-right rounded-md bg-white dark:bg-neutral-800 shadow-lg ring-1 ring-neutral-200 dark:ring-neutral-700 focus:outline-none z-40"
-                    >
-                      <div className="py-1 max-h-96 overflow-y-auto">
-                        <div className="px-4 py-2 border-b border-neutral-200 dark:border-neutral-700">
-                          <div className="flex justify-between items-center">
-                            <h2 className="text-sm font-semibold text-neutral-800 dark:text-white">Notifications</h2>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-300">
-                              {notifications.filter(n => !n.read).length} New
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {notifications.length > 0 ? (
-                          notifications.map(notification => (
-                            <div 
-                              key={notification.id}
-                              className={`px-4 py-3 border-b border-neutral-100 dark:border-neutral-700 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer ${!notification.read ? 'bg-neutral-50 dark:bg-neutral-800/60' : ''}`}
-                            >
-                              <div className="flex">
-                                <div className="flex-shrink-0">
-                                  <div className={`
-                                    h-10 w-10 rounded-full flex items-center justify-center 
-                                    ${notification.type === 'alert' ? 'bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400' : 
-                                      notification.type === 'success' ? 'bg-green-100 text-green-500 dark:bg-green-900/30 dark:text-green-400' :
-                                      'bg-primary-100 text-primary-500 dark:bg-primary-900/30 dark:text-primary-400'
-                                    }
-                                  `}>
-                                    {notification.type === 'alert' ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                      </svg>
-                                    ) : notification.type === 'success' ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    ) : (
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="ml-3 flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">{notification.title}</p>
-                                    {!notification.read && (
-                                      <div className="h-2 w-2 bg-primary-500 rounded-full"></div>
-                                    )}
-                                  </div>
-                                  <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{notification.message}</div>
-                                  <div className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">{notification.time}</div>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="p-4 text-center text-neutral-500 dark:text-neutral-400">
-                            <p className="text-sm">No notifications</p>
-                          </div>
-                        )}
-
-                        <div className="px-4 py-2 border-t border-neutral-200 dark:border-neutral-700">
-                          <button className="w-full text-center text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300">
-                            View all notifications
-                          </button>
+                {notificationsOpen && (
+                  <div className="absolute right-0 mt-1 w-72 bg-white dark:bg-neutral-800 shadow-md border border-neutral-200 dark:border-neutral-700 z-40">
+                    <div className="py-1 max-h-96 overflow-y-auto">
+                      <div className="px-4 py-2 border-b border-neutral-200 dark:border-neutral-700">
+                        <div className="flex justify-between items-center">
+                          <h2 className="text-sm font-semibold text-neutral-800 dark:text-white">Notifications</h2>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300">
+                            {notifications.filter(n => !n.read).length} New
+                          </span>
                         </div>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      
+                      {notifications.length > 0 ? (
+                        notifications.map(notification => (
+                          <div 
+                            key={notification.id}
+                            className={`px-4 py-2 border-b border-neutral-100 dark:border-neutral-700 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-700 cursor-pointer ${!notification.read ? 'bg-neutral-50 dark:bg-neutral-800' : ''}`}
+                          >
+                            <div className="flex">
+                              <div className="flex-shrink-0">
+                                <div className={`
+                                  h-8 w-8 rounded-full flex items-center justify-center 
+                                  ${notification.type === 'alert' ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300' : 
+                                    notification.type === 'success' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300' :
+                                    'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300'
+                                  }
+                                `}>
+                                  {notification.type === 'alert' ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                  ) : notification.type === 'success' ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="ml-2">
+                                <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">{notification.title}</p>
+                                <p className="text-xs text-neutral-500 dark:text-neutral-400">{notification.message}</p>
+                                <p className="text-xs text-neutral-400 dark:text-neutral-500">{notification.time}</p>
+                              </div>
+                              {!notification.read && (
+                                <div className="ml-auto mt-1">
+                                  <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-neutral-500 dark:text-neutral-400">
+                          <p className="text-sm">No notifications</p>
+                        </div>
+                      )}
+
+                      <div className="px-4 py-2 border-t border-neutral-200 dark:border-neutral-700">
+                        <button className="w-full text-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
+                          View all
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* User Menu */}
@@ -513,196 +531,197 @@ const TopNavigation = ({ companyName = "Assembly Management" }) => {
                 <button 
                   onClick={toggleUserDropdown}
                   type="button" 
-                  className="flex max-w-xs items-center rounded-full p-1 text-sm text-neutral-500 dark:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" 
+                  className="flex items-center" 
                   aria-label="User menu" 
                 >
                   <span className="sr-only">Open user menu</span>
-                  <div className="h-8 w-8 overflow-hidden rounded-full bg-primary-100 dark:bg-primary-900/30 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center">
-                    <span className="font-medium text-primary-600 dark:text-primary-400">JD</span>
+                  <div className="h-8 w-8 rounded-full bg-neutral-200 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 flex items-center justify-center">
+                    <span className="font-medium text-neutral-700 dark:text-neutral-300 text-sm">{getUserInitials()}</span>
                   </div>
                 </button>
 
-                <AnimatePresence>
-                  {userDropdownOpen && (
-                    <motion.div 
-                      initial="hidden" 
-                      animate="visible" 
-                      exit="hidden" 
-                      variants={dropdownVariants}
-                      className="absolute right-0 mt-1 w-48 origin-top-right rounded-md bg-white dark:bg-neutral-800 shadow-lg ring-1 ring-neutral-200 dark:ring-neutral-700 focus:outline-none z-40"
-                    >
-                      <div className="py-1 divide-y divide-neutral-100 dark:divide-neutral-700">
-                        <div className="px-4 py-3">
-                          <p className="text-sm text-neutral-800 dark:text-neutral-200">Logged in as</p>
-                          <p className="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200">user@example.com</p>
-                        </div>
-                        <div className="py-1">
-                          <Link to="/profile" className="block px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700">Your Profile</Link>
-                          <Link to="/settings" className="block px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700">Settings</Link>
-                          <button className="block w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700">
-                            Sign out
-                          </button>
-                        </div>
+                {userDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-neutral-800 shadow-md border border-neutral-200 dark:border-neutral-700 z-40">
+                    <div className="py-1 divide-y divide-neutral-100 dark:divide-neutral-700">
+                      <div className="px-4 py-2">
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">Logged in as</p>
+                        <p className="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                          {currentUser?.email || 'user@example.com'}
+                        </p>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <div className="py-1">
+                        <Link to="/profile" className="block px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">Your Profile</Link>
+                        <Link to="/settings" className="block px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700">Settings</Link>
+                        <button 
+                          onClick={onLogout}
+                          disabled={isLoggingOut}
+                          className="block w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+                        >
+                          {isLoggingOut ? "Signing out..." : "Sign out"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
           
         {/* Mobile menu */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-              variants={mobileMenuVariants}
-            >
-              <div className="space-y-1 px-4 pt-2 pb-3">
-                {/* Search bar for mobile */}
-                <form onSubmit={handleSearch} className="pb-2">
-                  <div className="relative mt-1 rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-neutral-400 dark:text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <input
-                      type="search"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="block w-full rounded-md border-neutral-300 pl-10 focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      placeholder="Search..."
-                    />
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-neutral-200 dark:border-neutral-700">
+            <div className="px-2 pt-2 pb-3 space-y-1">
+              {/* Search bar for mobile */}
+              <form onSubmit={handleSearch} className="pb-2">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-neutral-400 dark:text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                   </div>
-                </form>
-                
-                {/* Menu items for mobile */}
-                {menuItems.map((item) => (
-                  <div key={item.id} className="space-y-1">
-                    {item.hasSubmenu ? (
-                      <>
-                        <button
-                          onClick={() => toggleSubmenu(item.id)}
-                          className={`text-left flex items-center justify-between w-full rounded-md px-3 py-2 text-base font-medium ${isActiveMenuItem(item) || activeSubmenu === item.id ? 'text-primary-600 dark:text-primary-400 bg-neutral-50 dark:bg-neutral-800' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white'}`}
-                        >
-                          <div className="flex items-center">
-                            <span className="mr-3 text-neutral-500 dark:text-neutral-400">
-                              {item.icon}
-                            </span>
-                            {item.label}
-                          </div>
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            className={`h-5 w-5 transition-transform ${activeSubmenu === item.id ? 'transform rotate-180' : ''}`} 
-                            viewBox="0 0 20 20" 
-                            fill="currentColor"
-                          >
-                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                        
-                        <AnimatePresence>
-                          {activeSubmenu === item.id && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="pl-10 space-y-1"
-                            >
-                              {item.submenu.map((subItem) => (
-                                <button
-                                  key={subItem.id}
-                                  onClick={() => handleSubmenuItemClick(subItem.path)}
-                                  className={`text-left block w-full rounded-md px-3 py-2 text-sm font-medium ${isActiveSubmenuItem(subItem.path) ? 'text-primary-600 dark:text-primary-400 bg-neutral-50 dark:bg-neutral-800' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white'}`}
-                                >
-                                  {subItem.label}
-                                </button>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </>
-                    ) : (
-                      <NavLink
-                        to={item.path}
-                        className={({isActive}) => `flex items-center rounded-md px-3 py-2 text-base font-medium ${isActive ? 'text-primary-600 dark:text-primary-400 bg-neutral-50 dark:bg-neutral-800' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white'}`}
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="block w-full rounded border-neutral-300 dark:border-neutral-600 pl-8 py-1.5 bg-neutral-100 dark:bg-neutral-800 text-sm"
+                    placeholder="Search..."
+                  />
+                </div>
+              </form>
+              
+              {/* Menu items for mobile */}
+              {menuItems.map((item) => (
+                <div key={item.id} className="space-y-1">
+                  {item.hasSubmenu ? (
+                    <>
+                      <button
+                        onClick={() => toggleSubmenu(item.id)}
+                        className={`flex items-center justify-between w-full px-3 py-2 text-left text-base ${
+                          isActiveMenuItem(item) || activeSubmenu === item.id 
+                            ? 'text-blue-600 dark:text-blue-400 bg-neutral-50 dark:bg-neutral-800 font-medium' 
+                            : 'text-neutral-700 dark:text-neutral-300'
+                        }`}
                       >
-                        <span className="mr-3 text-neutral-500 dark:text-neutral-400">
-                          {item.icon}
-                        </span>
-                        {item.label}
-                      </NavLink>
-                    )}
-                  </div>
-                ))}
-
-                {/* Dark mode toggle for mobile */}
-                <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
-                  <button
-                    onClick={toggleDarkMode}
-                    type="button"
-                    className="flex w-full items-center rounded-md px-3 py-2 text-base font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white"
-                  >
-                    <span className="mr-3 text-neutral-500 dark:text-neutral-400">
-                      {darkMode ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                        <div className="flex items-center">
+                          <span className="mr-2 text-current">
+                            {getIcon(item.id)}
+                          </span>
+                          {item.label}
+                        </div>
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          className={`h-4 w-4 transition-transform ${activeSubmenu === item.id ? 'transform rotate-180' : ''}`} 
+                          viewBox="0 0 20 20" 
+                          fill="currentColor"
+                        >
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-                        </svg>
+                      </button>
+                      
+                      {activeSubmenu === item.id && (
+                        <div className="pl-10 space-y-1">
+                          {item.submenu.map((subItem) => (
+                            <button
+                              key={subItem.id}
+                              onClick={() => handleSubmenuItemClick(subItem.path)}
+                              className={`block w-full text-left px-3 py-2 text-sm ${
+                                isActiveSubmenuItem(subItem.path) 
+                                  ? 'text-blue-600 dark:text-blue-400 bg-neutral-50 dark:bg-neutral-700 font-medium' 
+                                  : 'text-neutral-700 dark:text-neutral-300'
+                              }`}
+                            >
+                              {subItem.label}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    </span>
-                    {darkMode ? "Light Mode" : "Dark Mode"}
+                    </>
+                  ) : (
+                    <NavLink
+                      to={item.path}
+                      className={({isActive}) => `flex items-center px-3 py-2 text-base ${
+                        isActive 
+                          ? 'text-blue-600 dark:text-blue-400 bg-neutral-50 dark:bg-neutral-800 font-medium' 
+                          : 'text-neutral-700 dark:text-neutral-300'
+                      }`}
+                    >
+                      <span className="mr-2 text-current">
+                        {getIcon(item.id)}
+                      </span>
+                      {item.label}
+                    </NavLink>
+                  )}
+                </div>
+              ))}
+
+              {/* Dark mode toggle for mobile */}
+              <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                <button
+                  onClick={toggleDarkMode}
+                  type="button"
+                  className="flex w-full items-center px-3 py-2 text-base text-neutral-700 dark:text-neutral-300"
+                >
+                  <span className="mr-2 text-current">
+                    {darkMode ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                      </svg>
+                    )}
+                  </span>
+                  {darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                </button>
+              </div>
+
+              {/* User section for mobile */}
+              <div className="pt-4 pb-2 border-t border-neutral-200 dark:border-neutral-700">
+                <div className="flex items-center px-3">
+                  <div className="flex-shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-neutral-200 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 flex items-center justify-center">
+                      <span className="font-medium text-neutral-700 dark:text-neutral-300 text-sm">{getUserInitials()}</span>
+                    </div>
+                  </div>
+                  <div className="ml-3">
+                    <div className="text-sm font-medium text-neutral-800 dark:text-white">
+                      {currentUser?.full_name || 'User'}
+                    </div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {currentUser?.email || 'user@example.com'}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-1">
+                  <Link
+                    to="/profile"
+                    className="block px-3 py-2 text-base text-neutral-700 dark:text-neutral-300"
+                  >
+                    Your Profile
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className="block px-3 py-2 text-base text-neutral-700 dark:text-neutral-300"
+                  >
+                    Settings
+                  </Link>
+                  <button
+                    onClick={onLogout}
+                    disabled={isLoggingOut}
+                    className="block w-full text-left px-3 py-2 text-base text-neutral-700 dark:text-neutral-300 disabled:opacity-50"
+                  >
+                    {isLoggingOut ? "Signing out..." : "Sign out"}
                   </button>
                 </div>
-
-                {/* User section for mobile */}
-                <div className="pt-4 pb-2 border-t border-neutral-200 dark:border-neutral-700">
-                  <div className="flex items-center px-4">
-                    <div className="flex-shrink-0">
-                      <div className="h-10 w-10 overflow-hidden rounded-full bg-primary-100 dark:bg-primary-900/30 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center">
-                        <span className="font-medium text-primary-600 dark:text-primary-400">JD</span>
-                      </div>
-                    </div>
-                    <div className="ml-3">
-                      <div className="text-base font-medium text-neutral-800 dark:text-white">User</div>
-                      <div className="text-sm font-medium text-neutral-500 dark:text-neutral-400">user@example.com</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 space-y-1">
-                    <Link
-                      to="/profile"
-                      className="block px-4 py-2 text-base font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white"
-                    >
-                      Your Profile
-                    </Link>
-                    <Link
-                      to="/settings"
-                      className="block px-4 py-2 text-base font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white"
-                    >
-                      Settings
-                    </Link>
-                    <button
-                      className="block w-full text-left px-4 py-2 text-base font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 hover:text-neutral-900 dark:hover:text-white"
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        )}
       </header>
     </div>
   );
-};
+});
 
 export default TopNavigation;

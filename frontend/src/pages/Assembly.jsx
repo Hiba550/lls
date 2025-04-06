@@ -44,8 +44,8 @@ const Assembly = () => {
     
     // Check item code for indicators
     if (order.item_code) {
-      if (order.item_code.includes('YSB') || order.item_code.includes('5YB')) {
-        return 'YSB';
+      if (order.item_code.includes('YBS') || order.item_code.includes('5YB')) {
+        return 'YBS';
       }
       if (order.item_code.includes('RSM')) {
         return 'RSM';
@@ -54,8 +54,8 @@ const Assembly = () => {
     
     // Check product name for indicators
     if (order.product) {
-      if (order.product.includes('YBS') || order.product.includes('YSB')) {
-        return 'YSB';
+      if (order.product.includes('YBS') || order.product.includes('YBS')) {
+        return 'YBS';
       }
       if (order.product.includes('RSM')) {
         return 'RSM';
@@ -225,7 +225,7 @@ const Assembly = () => {
       setLoading(true);
       
       // Determine PCB type from the work order using our helper
-      const pcbType = detectPcbType(workOrder) || 'YSB';
+      const pcbType = detectPcbType(workOrder) || 'YBS';
       toast.info(`Creating ${pcbType} assembly process...`);
       
       // Create a new assembly process
@@ -244,9 +244,9 @@ const Assembly = () => {
         // Get the item code for routing - use a default if not available
         const itemCode = workOrder.item_code || 'default';
         
-        // For YSB PCBs, navigate to YSB assembly page
-        if (pcbType === 'YSB') {
-          navigate(`/assembly/ysb/${itemCode}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`);
+        // For YBS PCBs, navigate to YBS assembly page
+        if (pcbType === 'YBS') {
+          navigate(`/assembly/ybs/${itemCode}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`);
         } 
         // For RSM PCBs, navigate to RSM assembly page
         else {
@@ -331,8 +331,8 @@ const Assembly = () => {
             ...order,
             pcb_type: assignType,
             // Update item_code prefix if it doesn't match the assigned type
-            item_code: assignType === 'YSB' && !order.item_code.includes('YSB') && !order.item_code.includes('5YB') 
-              ? `YSB-${order.item_code}`
+            item_code: assignType === 'YBS' && !order.item_code.includes('YBS') && !order.item_code.includes('5YB') 
+              ? `YBS-${order.item_code}`
               : assignType === 'RSM' && !order.item_code.includes('RSM')
               ? `RSM-${order.item_code}`
               : order.item_code
@@ -401,10 +401,10 @@ const Assembly = () => {
   const sortedCompletedOrders = sortWorkOrders(filteredCompletedOrders);
   
   // Categorize by PCB type with improved detection
-  const ysbOrders = filteredPendingOrders.filter(order => detectPcbType(order) === 'YSB');
+  const ysbOrders = filteredPendingOrders.filter(order => detectPcbType(order) === 'YBS');
   const rsmOrders = filteredPendingOrders.filter(order => detectPcbType(order) === 'RSM');
   
-  // Unassigned orders (neither YSB nor RSM)
+  // Unassigned orders (neither YBS nor RSM)
   const unassignedOrders = filteredPendingOrders.filter(order => detectPcbType(order) === null);
 
   const handleSort = (field) => {
@@ -486,14 +486,14 @@ const Assembly = () => {
                 All
               </button>
               <button
-                onClick={() => setPcbTypeFilter('YSB')}
+                onClick={() => setPcbTypeFilter('YBS')}
                 className={`px-3 py-1 text-sm font-medium rounded-md ${
-                  pcbTypeFilter === 'YSB' 
+                  pcbTypeFilter === 'YBS' 
                     ? 'bg-blue-100 text-blue-800' 
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                YSB
+                YBS
               </button>
               <button
                 onClick={() => setPcbTypeFilter('RSM')}
@@ -611,11 +611,11 @@ const Assembly = () => {
               </div>
             )}
           
-            {/* YSB PCB Assemblies - only show if filter is all or YSB */}
-            {(pcbTypeFilter === 'all' || pcbTypeFilter === 'YSB') && (
+            {/* YBS PCB Assemblies - only show if filter is all or YBS */}
+            {(pcbTypeFilter === 'all' || pcbTypeFilter === 'YBS') && (
               <div className="mb-8">
                 <h4 className="text-md font-semibold mb-3 text-blue-700 border-b pb-2">
-                  YSB PCB Assemblies
+                  YBS PCB Assemblies
                 </h4>
                 
                 <div className="overflow-x-auto">
@@ -649,7 +649,7 @@ const Assembly = () => {
                       {ysbOrders.length === 0 ? (
                         <tr>
                           <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
-                            No YSB work orders available
+                            No YBS work orders available
                           </td>
                         </tr>
                       ) : (
@@ -684,7 +684,7 @@ const Assembly = () => {
                                 onClick={() => handleStartAssembly(order)}
                                 className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition-colors"
                               >
-                                Start YSB Assembly
+                                Start YBS Assembly
                               </button>
                               <button
                                 onClick={() => handleAssignPcbType(order)}
@@ -858,7 +858,7 @@ const Assembly = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <span className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
-                          detectPcbType(order) === 'YSB' 
+                          detectPcbType(order) === 'YBS' 
                             ? 'bg-blue-100 text-blue-800' 
                             : 'bg-green-100 text-green-800'
                         }`}>
@@ -901,16 +901,16 @@ const Assembly = () => {
           <div className="mt-2 space-y-2">
             <div className="flex items-center">
               <input
-                id="ysb-type"
+                id="ybs-type"
                 name="pcb-type"
                 type="radio"
-                value="YSB"
-                checked={assignType === 'YSB'}
-                onChange={() => setAssignType('YSB')}
+                value="YBS"
+                checked={assignType === 'YBS'}
+                onChange={() => setAssignType('YBS')}
                 className="h-4 w-4 text-blue-600 border-gray-300"
               />
-              <label htmlFor="ysb-type" className="ml-2 block text-sm text-gray-700">
-                YSB PCB
+              <label htmlFor="ybs-type" className="ml-2 block text-sm text-gray-700">
+                YBS PCB
               </label>
             </div>
             <div className="flex items-center">

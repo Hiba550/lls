@@ -208,9 +208,12 @@ const RSMAssemblyManager = () => {
       localStorage.setItem('currentRSMWorkOrderId', workOrder.id);
       localStorage.setItem('currentRSMItemCode', pcbItemCode);
       
+      // Use raw item code without adding RSM- prefix
+      const itemCodeForUrl = workOrder.item_code || `5RS${pcbItemCode.replace(/^RSM/, '')}`;
+      
       // Navigate to the corresponding assembly page with work order ID
       toast.success(`Assembly process prepared successfully!`);
-      navigate(`/assembly/rsm/${pcbItemCode}?workOrderId=${workOrder.id}`);
+      navigate(`/assembly/rsm/${itemCodeForUrl}?workOrderId=${workOrder.id}`);
     } catch (err) {
       console.error('Error preparing assembly process:', err);
       toast.error('Failed to prepare assembly. Please try again.');
@@ -370,8 +373,12 @@ const RSMAssemblyManager = () => {
                     const pcbItemCode = 
                       assembly.work_order?.pcb_item_code || 
                       assembly.part_code || 
-                      assembly.work_order?.item_code?.replace(/^5RS/, 'RSM') || 
+                      assembly.work_order?.item_code || 
                       'RSM011075';
+                    
+                    // Use raw item code without RSM- prefix for URL
+                    const itemCodeForUrl = assembly.work_order?.item_code || 
+                                            (pcbItemCode.includes('5RS') ? pcbItemCode : `5RS${pcbItemCode.replace(/^RSM/, '')}`);
                     
                     return (
                       <tr key={assembly.id}>
@@ -398,7 +405,7 @@ const RSMAssemblyManager = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <Link
-                            to={`/assembly/rsm/${pcbItemCode}?workOrderId=${assembly.work_order?.id || assembly.id}`}
+                            to={`/assembly/rsm/${itemCodeForUrl}?workOrderId=${assembly.work_order?.id || assembly.id}&assemblyId=${assembly.id}`}
                             className="text-blue-600 hover:text-blue-800 px-3 py-1 border border-blue-600 hover:bg-blue-50 rounded-md"
                           >
                             Continue

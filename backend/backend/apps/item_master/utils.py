@@ -4,7 +4,7 @@ from ..work_order.models import WorkOrder
 import datetime
 
 def create_sample_ysb_data():
-    """Create sample YSB data in the database"""
+    """Create sample YBS data in the database"""
     
     # Define all YBS machine types
     ysb_machines = [
@@ -110,7 +110,7 @@ def create_sample_ysb_data():
     else:
         print(f"Work order for {work_order.item_code} already exists")
     
-    return "Sample YSB data created successfully with all 9 machine types"
+    return "Sample YBS data created successfully with all 9 machine types"
 
 def import_item_master_data(item_data_list):
     """

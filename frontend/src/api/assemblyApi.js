@@ -58,7 +58,7 @@ export const deleteAssembly = async (id) => {
 };
 
 /**
- * Fetch assemblies by type (e.g., 'YSB', 'RSM')
+ * Fetch assemblies by type (e.g., 'YBS', 'RSM')
  * @param {string} type - Assembly type
  * @param {Object} params - Query parameters
  * @returns {Promise<Array>} - List of assemblies of specified type

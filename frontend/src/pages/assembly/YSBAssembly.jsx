@@ -6,7 +6,7 @@ import { fetchAssemblyProcesses, createAssemblyProcess } from '../../api/assembl
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// This component will manage YSB assemblies
+// This component will manage YBS assemblies
 const YSBAssembly = () => {
   const [workOrders, setWorkOrders] = useState([]);
   const [inProgressAssemblies, setInProgressAssemblies] = useState([]);

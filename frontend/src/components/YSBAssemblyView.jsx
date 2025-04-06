@@ -33,7 +33,7 @@ const YSBAssemblyView = () => {
         }
 
         // Log information to help with debugging
-        console.log('Loading YSB Assembly with:', {
+        console.log('Loading YBS Assembly with:', {
           itemCode,
           assemblyId,
           workOrderId
@@ -74,10 +74,10 @@ const YSBAssemblyView = () => {
         <h2 className="text-xl font-bold mb-2">Error</h2>
         <p>{error}</p>
         <button 
-          onClick={() => navigate('/assembly/ysb')}
+          onClick={() => navigate('/assembly/ybs')}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
-          Return to YSB PCB Inspection
+          Return to YBS PCB Inspection
         </button>
       </div>
     );
@@ -92,15 +92,15 @@ const YSBAssemblyView = () => {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">YSB Assembly Details</h2>
+          <h2 className="text-2xl font-bold text-gray-800">YBS Assembly Details</h2>
           <p className="text-gray-600">Item Code: {itemCode}</p>
         </div>
         <div className="flex space-x-2">
           <button 
-            onClick={() => navigate('/assembly/ysb')}
+            onClick={() => navigate('/assembly/ybs')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
           >
-            Back to YSB PCB Inspection
+            Back to YBS PCB Inspection
           </button>
           <button 
             onClick={redirectToMainDashboard}

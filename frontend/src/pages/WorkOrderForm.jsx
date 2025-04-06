@@ -17,10 +17,10 @@ const WorkOrderForm = () => {
   
   // Machine options based on PCB type
   const machineOptions = {
-    YSB: [
-      { id: 'ysb-m1', name: 'YSB Machine 1' },
-      { id: 'ysb-m2', name: 'YSB Machine 2' },
-      { id: 'ysb-m3', name: 'YSB Machine 3' }
+    YBS: [
+      { id: 'ybs-m1', name: 'YBS Machine 1' },
+      { id: 'ybs-m2', name: 'YBS Machine 2' },
+      { id: 'ybs-m3', name: 'YBS Machine 3' }
     ],
     RSM: [
       { id: 'rsm-m1', name: 'RSM Machine 1' },
@@ -33,7 +33,7 @@ const WorkOrderForm = () => {
     product: '',
     item_code: '',
     pcb_type: '',  // This will now hold the PCB type ID, not the code
-    pcb_type_code: '', // New field to store the code (YSB, RSM) for UI display
+    pcb_type_code: '', // New field to store the code (YBS, RSM) for UI display
     pcb_item_code: '',
     quantity: 1,
     target_date: new Date().toISOString().split('T')[0],
@@ -59,11 +59,11 @@ const WorkOrderForm = () => {
           setPcbTypes(typeCodes);
         } else {
           // Fallback if no data
-          setPcbTypes(['YSB', 'RSM']);
+          setPcbTypes(['YBS', 'RSM']);
         }
       } catch (error) {
         console.error('Failed to load PCB types', error);
-        setPcbTypes(['YSB', 'RSM']);
+        setPcbTypes(['YBS', 'RSM']);
       }
     };
 
@@ -158,7 +158,7 @@ const WorkOrderForm = () => {
       
       setFormData(prev => {
         // Get the prefix for this PCB type
-        const prefix = value === 'YSB' ? '5YB' : value === 'RSM' ? '5RS' : '';
+        const prefix = value === 'YBS' ? '5YB' : value === 'RSM' ? '5RS' : '';
         
         // Update item_code if needed
         const updatedItemCode = prefix && !prev.item_code.startsWith(prefix) ? 
@@ -247,7 +247,7 @@ const WorkOrderForm = () => {
       }
       
       // Ensure item_code has the correct prefix
-      if (formData.pcb_type_code === 'YSB' && !dataToSend.item_code.startsWith('5YB')) {
+      if (formData.pcb_type_code === 'YBS' && !dataToSend.item_code.startsWith('5YB')) {
         dataToSend.item_code = `5YB${dataToSend.item_code.replace(/^(5YB|5RS)/, '')}`;
       } else if (formData.pcb_type_code === 'RSM' && !dataToSend.item_code.startsWith('5RS')) {
         dataToSend.item_code = `5RS${dataToSend.item_code.replace(/^(5YB|5RS)/, '')}`;
@@ -393,10 +393,10 @@ const WorkOrderForm = () => {
                 onChange={handleChange}
                 required
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder={`${formData.pcb_type_code === 'YSB' ? '5YB' : formData.pcb_type_code === 'RSM' ? '5RS' : ''}XXXXXX`}
+                placeholder={`${formData.pcb_type_code === 'YBS' ? '5YB' : formData.pcb_type_code === 'RSM' ? '5RS' : ''}XXXXXX`}
               />
               <p className="mt-1 text-sm text-gray-500">
-                Item code should start with 5YB for YSB or 5RS for RSM PCB types
+                Item code should start with 5YB for YBS or 5RS for RSM PCB types
               </p>
             </div>
             

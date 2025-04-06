@@ -27,7 +27,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         elif instance.item_code:
             # Try to detect type from item code
             if instance.item_code.startswith('5YB'):
-                representation['pcb_type_code'] = 'YSB'
+                representation['pcb_type_code'] = 'YBS'
             elif instance.item_code.startswith('5RS'):
                 representation['pcb_type_code'] = 'RSM'
         

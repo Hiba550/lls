@@ -55,9 +55,9 @@ const WorkOrders = () => {
       : true;
     
     const matchesFilter = selectedFilter === 'all' ? true :
-      selectedFilter === 'YSB' ? 
-        (order.pcb_type === 'YSB' || 
-         (order.item_code && (order.item_code.includes('YSB') || order.item_code.includes('5YB'))))
+      selectedFilter === 'YBS' ? 
+        (order.pcb_type === 'YBS' || 
+         (order.item_code && (order.item_code.includes('YBS') || order.item_code.includes('5YB'))))
         :
       selectedFilter === 'RSM' ? 
         (order.pcb_type === 'RSM' || 
@@ -102,7 +102,7 @@ const WorkOrders = () => {
   // Determine PCB type from item code
   const getPcbType = (itemCode) => {
     if (!itemCode) return 'Unknown';
-    if (itemCode.includes('5YB') || itemCode.includes('YSB')) return 'YSB';
+    if (itemCode.includes('5YB') || itemCode.includes('YBS')) return 'YBS';
     if (itemCode.includes('5RS') || itemCode.includes('RSM')) return 'RSM';
     return 'Unknown';
   };
@@ -110,7 +110,7 @@ const WorkOrders = () => {
   // Get assembly link based on PCB type
   const getAssemblyLink = (order) => {
     const pcbType = order.pcb_type || getPcbType(order.item_code);
-    if (pcbType === 'YSB') return `/assembly/ysb/${order.item_code}`;
+    if (pcbType === 'YBS') return `/assembly/ybs/${order.item_code}`;
     if (pcbType === 'RSM') return `/assembly/rsm/${order.item_code}`;
     return '/assembly';
   };
@@ -191,14 +191,14 @@ const WorkOrders = () => {
               All
             </button>
             <button
-              onClick={() => setSelectedFilter('YSB')}
+              onClick={() => setSelectedFilter('YBS')}
               className={`px-4 py-2 text-sm font-medium rounded-md ${
-                selectedFilter === 'YSB' 
+                selectedFilter === 'YBS' 
                   ? 'bg-blue-100 text-blue-800' 
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
-              YSB
+              YBS
             </button>
             <button
               onClick={() => setSelectedFilter('RSM')}
@@ -328,7 +328,7 @@ const WorkOrders = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                       className={`hover:bg-gray-50 ${
-                        pcbType === 'YSB' 
+                        pcbType === 'YBS' 
                           ? 'hover:bg-blue-50' 
                           : pcbType === 'RSM' 
                           ? 'hover:bg-green-50'
@@ -343,7 +343,7 @@ const WorkOrders = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          pcbType === 'YSB' 
+                          pcbType === 'YBS' 
                             ? 'bg-blue-100 text-blue-800' 
                             : pcbType === 'RSM' 
                             ? 'bg-green-100 text-green-800'
