@@ -3,22 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive YBS Machine Circuit Board Layout - 5RS011111</title>
+    <title>RSM Assembly - 5RS011111</title>
     <style>
         :root {
-            /* PCB Colors */
-            --left-pcb-color: #d9f9d9; /* Light Green for Slave */
-            --master-pcb-color: #d3d3d3; /* Grey for Master */
-            /* --right-pcb-color: #a8e4f0; /* Not used in this layout */
-
-            /* Cable Colors */
-            --board-to-board-yellow: #fff3cd; /* Yellow for Slave-Slave */
-            --board-to-board-orange: #ffe8cc; /* Orange for Master-Slave */
-            /* --board-to-board-green: #5c9e31; /* Not used in this layout */
-            --board-to-board-color: #999; /* Fallback/Base */
-
-            /* Other Styles */
+            --left-pcb-color: #b5e6b5;
+            --master-pcb-color: #d3d3d3;
+            --right-pcb-color: #a8e4f0;
             --highlight-yellow: #ffeb3b;
+            --board-to-board-color: #999;
+            --board-to-board-green: #5c9e31;
             --border-color: #aaa;
             --hover-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
             --transition-speed: 0.2s;
@@ -31,6 +24,13 @@
             --component-name-text: var(--text-color-dark);
             --tooltip-bg: rgba(54, 69, 79, 0.95);
             --tooltip-text: var(--text-color-light);
+            --slave-to-slave-cable: #ffd700;
+            --master-to-slave-cable: #ff9e3d;
+            --pc-cable-bg: #f0f0f0;
+            --status-success: #4caf50;
+            --status-error: #f44336;
+            --status-warning: #ff9800;
+            --status-info: #2196f3;
         }
 
         * {
@@ -86,7 +86,6 @@
             font-weight: 600;
             font-size: 0.875rem;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            line-height: 1.3; /* Adjusted for multi-line */
         }
 
         .board-to-board-title {
@@ -127,11 +126,9 @@
             border: 1px solid var(--border-color);
             padding: 0.5rem 0.25rem;
             font-size: 0.75rem;
-            height: 2.5rem; /* Adjusted height slightly */
+            height: 2.5rem;
             position: relative;
             transition: all var(--transition-speed) ease;
-            vertical-align: middle; /* Ensure vertical centering */
-            text-align: center; /* Center text by default */
         }
 
         .component-name {
@@ -160,7 +157,6 @@
             position: relative;
             overflow: hidden;
             transition: all var(--transition-speed) ease;
-            cursor: pointer; /* Add cursor pointer to all interactive cells */
         }
 
         .cell:hover {
@@ -169,16 +165,16 @@
             z-index: 100;
         }
 
-        /* Removed unused sensor styles */
-
-        .left-pcb { /* Slave PCB - Light Green */
-            background-color: var(--left-pcb-color);
+        .left-pcb {
+            background-color: #ffffff;
+            text-align: center;
             font-size: 0.7rem;
             font-weight: 500;
             padding: 0.75rem 0.25rem;
             line-height: 1.3;
             vertical-align: middle;
             position: relative;
+            cursor: pointer;
         }
 
         .left-pcb::before {
@@ -191,15 +187,17 @@
             background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
         }
 
-        .master-pcb { /* Master PCB - Grey */
-            background-color: var(--master-pcb-color);
+        .master-pcb {
+            background-color: #ffffff;
             color: var(--text-color-dark);
+            text-align: center;
             font-size: 0.7rem;
             font-weight: 500;
             padding: 0.75rem 0.25rem;
             line-height: 1.3;
             vertical-align: middle;
             position: relative;
+            cursor: pointer;
         }
 
         .master-pcb::before {
@@ -212,46 +210,55 @@
             background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
         }
 
-        /* Removed unused .right-pcb style */
+        .right-pcb {
+            background-color: #ffffff;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.75rem 0.25rem;
+            line-height: 1.3;
+            vertical-align: middle;
+            position: relative;
+            cursor: pointer;
+        }
 
-        .board-to-board { /* Base style for connection cables */
-            color: var(--text-color-dark); /* Default text color */
+        .right-pcb::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
+        }
+
+        .board-to-board {
+            background-color: #ffffff;
+            color: var(--text-color-dark);
+            text-align: center;
             font-size: 0.7rem;
             font-weight: 500;
             line-height: 1.2;
             vertical-align: middle;
-            background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
+            background-image: none;
+            cursor: pointer;
         }
 
-        .board-to-board-yellow { /* Slave-to-Slave Cable - Yellow */
-            background-color: var(--board-to-board-yellow);
-        }
-
-        .board-to-board-orange { /* Master-to-Slave Cable - Orange */
-            background-color: var(--board-to-board-orange);
-        }
-
-        /* Removed unused .board-to-board-green style */
-
-        .power-cable { /* P&C Cable - White */
+        .master-to-right {
             background-color: #ffffff;
-            font-weight: 600;
-            font-size: 0.875rem;
-            padding: 0.75rem 0.25rem;
+            color: var(--text-color-dark);
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 500;
+            line-height: 1.2;
             vertical-align: middle;
-            background-image: linear-gradient(to bottom, #f9f9f9, #ffffff);
+            background-image: none;
+            cursor: pointer;
         }
 
         .empty-cell {
             background-color: #ffffff;
-            cursor: default; /* No pointer on empty cells */
         }
-        .empty-cell:hover {
-             transform: none; /* No hover effect on empty cells */
-             box-shadow: none;
-             z-index: auto;
-        }
-
 
         .circuit-lines {
             position: absolute;
@@ -304,7 +311,6 @@
             opacity: 0;
             pointer-events: none;
             transition: all 0.2s ease;
-            white-space: normal; /* Allow tooltip text to wrap */
         }
 
         .tooltip.show {
@@ -315,12 +321,12 @@
         .tooltip::after {
             content: '';
             position: absolute;
-            bottom: -6px; /* Position arrow at the bottom */
+            top: -6px;
             left: 50%;
             transform: translateX(-50%);
-            border-width: 6px 6px 0; /* Point arrow upwards */
+            border-width: 0 6px 6px;
             border-style: solid;
-            border-color: var(--tooltip-bg) transparent transparent;
+            border-color: transparent transparent var(--tooltip-bg);
         }
 
         .connection-line {
@@ -331,7 +337,6 @@
             transform-origin: left;
             transform: scaleX(0);
             pointer-events: none;
-            transition: transform 0.3s ease, box-shadow 0.3s ease; /* Added transition */
         }
 
         .connection-line.active {
@@ -339,72 +344,277 @@
             box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
         }
 
-        /* Removed unused pulse animation */
-
-        @media (max-width: 992px) {
-            .container {
-                padding: 1rem;
-            }
-
-            .component-name {
-                width: 6rem;
-                font-size: 0.7rem;
-            }
-
-            /* Removed unused sensor styles */
-
-            .left-pcb, .master-pcb {
-                font-size: 0.65rem;
-                padding: 0.5rem 0.125rem;
-            }
-             .board-to-board, .board-to-board-yellow, .board-to-board-orange {
-                 font-size: 0.65rem;
-                 padding: 0.5rem 0.125rem;
-             }
-
-            .power-cable {
-                font-size: 0.75rem;
-            }
+        .power-cable {
+            background-color: #ffffff;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.75rem 0.25rem;
+            vertical-align: middle;
+            background-image: none;
+            cursor: pointer;
         }
 
-        @media (max-width: 768px) {
-            .title {
-                font-size: 1.5rem;
-            }
+        .cell.success {
+            background-color: var(--status-success) !important; 
+            color: white !important;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.6);
+            animation: successPulse 2s ease-in-out;
+            font-weight: 600;
+            text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+        }
 
-            .board-to-board-title {
-                font-size: 1.75rem;
-            }
+        @keyframes successPulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.8); }
+            70% { box-shadow: 0 0 10px 10px rgba(76, 175, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+        }
 
-            .circuit-table {
-                font-size: 0.65rem;
-            }
-            .circuit-table td {
-                font-size: 0.65rem; /* Adjust base font size */
-            }
+        .cell.error {
+            background-color: var(--status-error);
+            color: white !important;
+            animation: errorShake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
 
-            .component-name {
-                width: 5rem;
-                 font-size: 0.65rem;
-            }
-             .left-pcb, .master-pcb {
-                 font-size: 0.6rem;
-             }
-             .board-to-board, .board-to-board-yellow, .board-to-board-orange {
-                 font-size: 0.6rem;
-                 line-height: 1.1;
-             }
-             .power-cable {
-                 font-size: 0.7rem;
-             }
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+
+        .cell.next {
+            background-color: var(--highlight-yellow);
+            animation: nextPulse 2s infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cell.next::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes nextPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0.7); }
+            70% { box-shadow: 0 0 10px 10px rgba(255, 235, 59, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0); }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .scan-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #f1f5f9;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+        }
+
+        .scan-input-container {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .scan-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+        }
+
+        .scan-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .scan-button:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .scan-button:active {
+            transform: translateY(0);
+        }
+
+        .progress-container {
+            margin-bottom: 1rem;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-label {
+            font-weight: 600;
+        }
+
+        .progress-bar {
+            height: 0.75rem;
+            background-color: #e2e8f0;
+            border-radius: 0.375rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #3b82f6;
+            border-radius: 0.375rem;
+            transition: width 0.5s ease;
+        }
+
+        .logs-container {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-header {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.375rem;
+        }
+
+        .log-item {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .log-time {
+            color: #64748b;
+        }
+
+        .log-item.success .log-message {
+            color: #16a34a;
+        }
+
+        .log-item.error .log-message {
+            color: #dc2626;
+        }
+
+        .log-item.warning .log-message {
+            color: #ea580c;
+        }
+
+        .log-item.info .log-message {
+            color: #3b82f6;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 9999;
+            font-size: 0.95rem;
+            transform: translateY(20px);
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification.success {
+            background-color: #10b981;
+            color: white;
+            border-left: 5px solid #059669;
+        }
+
+        .notification.error {
+            background-color: #ef4444;
+            color: white;
+            border-left: 5px solid #b91c1c;
+        }
+
+        .notification.info {
+            background-color: #3b82f6;
+            color: white;
+            border-left: 5px solid #2563eb;
+        }
+
+        .notification.warning {
+            background-color: #f59e0b;
+            color: white;
+            border-left: 5px solid #d97706;
+        }
+
+        .complete-button {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .complete-button:hover {
+            background-color: #15803d;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .complete-button:active {
+            transform: translateY(0);
+        }
+
+        .complete-button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container" id="mainContainer">
         <div class="header">
-            <div class="part-id">5RS011111 <br> 1Master 3Slave <br> 65 mm</div>
-            <h1 class="title">RAP - ILI DUCT ASSEMBLY</h1>
+            <div class="part-id">5RS011111 <br> 3Slave + Master <br> 70 mm</div>
+            <h1 class="title">RSM ASSEMBLY</h1>
         </div>
 
         <div class="board-to-board-title">Board to Board</div>
@@ -413,89 +623,771 @@
         <div class="glow"></div>
 
         <table class="circuit-table" id="circuitTable">
-            <tbody> <!-- Added tbody for structure -->
-                <tr>
-                    <td class="component-name">PCB BOARD</td>
-                    <td class="left-pcb cell" colspan="6" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
-                    <td class="left-pcb cell" colspan="6" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
-                    <td class="left-pcb cell" colspan="6" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
-                    <td class="master-pcb cell" colspan="6" data-tooltip="ASSEMBLED RSM MASTER PCB BL Ver">ASSEMBLED RSM MASTER PCB BL Ver</td>
-                </tr>
-                <tr>
-                    <td class="component-name">Joining Cable</td>
-                    <td class="cell empty-cell" colspan="4"></td> <!-- Space before 1st cable -->
-                    <td class="cell board-to-board board-to-board-yellow" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM">Slave to Slave PCB <br>(10-12) - xxx</td>
-                    <td class="cell empty-cell" colspan="2"></td> <!-- Space between 1st & 2nd -->
-                    <td class="cell board-to-board board-to-board-yellow" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 120MM">Slave to Slave PCB <br>(10-12) - xxx</td>
-                    <td class="cell empty-cell" colspan="2"></td> <!-- Space between 2nd & 3rd -->
-                    <td class="cell board-to-board board-to-board-orange" colspan="4" data-tooltip="Master to Right slave PCB (10-10) - 90MM">Master to Right slave PCB <br>(10-10) -xxxx</td>
-                    <td class="cell empty-cell" colspan="4"></td> <!-- Space after 3rd cable -->
-                </tr>
-                <tr>
-                    <td class="component-name">P&C Cable</td>
-                    <td class="power-cable cell" colspan="24" data-tooltip="RSM - POWER & COMMUNICATION CABLE ASSY with RMC - BL Ver - (75mm Pitch)">RSM - POWER & COMMUNICATION CABLE ASSY with RMC - BL Ver - (75mm Pitch)</td>
-                </tr>
-            </tbody>
+            <tr>
+                <td class="component-name">PCB BOARD</td>
+                <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                <td class="master-pcb cell" colspan="8" data-tooltip="ASSEMBLED RSM MASTER PCB BL Ver">ASSEMBLED RSM MASTER PCB BL Ver</td>
+            </tr>
+            <tr>
+                <td class="component-name">Joining Cable</td>
+                <td class="empty-cell" colspan="6"></td>
+                <td class="board-to-board cell" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 80MM">Slave to Slave PCB <br>(10-12) - 80MM</td>
+                <td class="empty-cell" colspan="4"></td>
+                <td class="board-to-board cell" colspan="4" data-tooltip="Slave to Slave PCB (10-12) - 80MM">Slave to Slave PCB <br>(10-12) - 80MM</td>
+                <td class="empty-cell" colspan="4"></td>
+                <td class="master-to-right cell" colspan="6" data-tooltip="Master to Right Cable">Master to Right Cable</td>
+                <td class="empty-cell" colspan="4"></td>
+            </tr>
+            <tr>
+                <td class="component-name">P&C Cable</td>
+                <td class="power-cable cell" colspan="32" data-tooltip="RSM - POWER & COMMUNICATION CABLE ASSY with out RMC - BL Ver - RR">RSM - POWER & COMMUNICATION CABLE ASSY with out RMC - BL Ver - RR</td>
+            </tr>
         </table>
 
         <div id="tooltip" class="tooltip"></div>
-        <!-- Connection lines - Note: JS positioning needs adjustment for this layout -->
         <div id="connectionLine1" class="connection-line"></div>
         <div id="connectionLine2" class="connection-line"></div>
-        <!-- <div id="connectionLine3" class="connection-line"></div> --> <!-- Example if adding 3rd line -->
+        <div id="connectionLine3" class="connection-line"></div>
+
+        <div class="scan-section">
+            <h2 class="text-xl font-semibold mb-4">Component Verification</h2>
+            
+            <div class="scan-input-container">
+                <input type="text" id="barcodeInput" class="scan-input" placeholder="Scan component barcode..." autofocus>
+                <button id="scanButton" class="scan-button">Verify</button>
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-header">
+                    <div class="progress-label">Assembly Progress</div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="logs-container">
+                <div class="log-header">Assembly Logs</div>
+                <div id="logsContent"></div>
+            </div>
+            
+            <button id="completeButton" class="complete-button hidden" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                Complete Assembly
+            </button>
+            <button id="restartButton" class="complete-button" style="background-color: #f59e0b; margin-bottom: 0.5rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 4v6h6"></path>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Restart Assembly
+            </button>
+        </div>
+        <div id="notification" class="notification"></div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Removed unused pulse effect code for .highlighted-sensor
+        // Define API_URL at the top level for consistency with other files
+        const API_URL = '/api';
+        let inventoryDataLoaded = false;
+        let apiConnected = false;
 
+        // Component mapping for scanning interface with your specified item codes
+        const componentMapping = {
+            "slave_pcb_1": {
+                itemCode: "4RS013097",
+                name: "Slave PCB 1",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 1
+            },
+            "slave_pcb_2": {
+                itemCode: "4RS013097",
+                name: "Slave PCB 2",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 2
+            },
+            "slave_pcb_3": {
+                itemCode: "4RS013097",
+                name: "Slave PCB 3",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 3
+            },
+            "master_pcb": {
+                itemCode: "4RS013114",
+                name: "Master PCB",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 4
+            },
+            "s2s_cable_1": {
+                itemCode: "5RS014055",
+                name: "Slave to Slave Cable 1",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 5
+            },
+            "s2s_cable_2": {
+                itemCode: "5RS014055",
+                name: "Slave to Slave Cable 2",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 6
+            },
+            "master_to_right": {
+                itemCode: "4RS013121",
+                name: "Master to Right Cable",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 7
+            },
+            "pc_cable": {
+                itemCode: "5RS014056",
+                name: "Power & Communication Cable",
+                element: null,
+                verificationCode: "",
+                scanned: false,
+                scannedBarcode: null,
+                index: 8
+            }
+        };
+
+        // Keep track of scanned barcodes to prevent duplicates
+        let scannedBarcodes = new Set();
+        let barcodeInput = null;
+        let scanButton = null;
+        let completeButton = null;
+        let restartButton = null;
+        let progressFill = null;
+        let progressPercentage = null;
+        let logsContent = null;
+
+        // Global variable to store assembly ID
+        let assemblyId = null;
+
+        async function fetchVerificationCodesFromAPI() {
+            try {
+                console.log("Fetching verification codes from inventory API...");
+                addLogEntry("Attempting to connect to inventory API...", "info");
+                
+                // Create an array of promises for parallel fetching
+                let successCount = 0;
+                const fetchPromises = [];
+                
+                for (const [key, comp] of Object.entries(componentMapping)) {
+                    const fetchPromise = fetch(`${API_URL}/item-master/?search=${comp.itemCode}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Failed to fetch for ${comp.name}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data && data.length > 0) {
+                                // Use data[0].code since that's the field in our API
+                                comp.verificationCode = data[0].code || "";
+                                if (comp.verificationCode) {
+                                    successCount++;
+                                    return { success: true, key };
+                                }
+                            }
+                            return { success: false, key };
+                        })
+                        .catch(error => {
+                            console.error(`Error fetching data for ${key}:`, error);
+                            return { success: false, key, error };
+                        });
+                    
+                    fetchPromises.push(fetchPromise);
+                }
+                
+                // Wait for all fetch operations to complete
+                await Promise.all(fetchPromises);
+                
+                // Check if we had any successful API calls
+                apiConnected = successCount > 0;
+                
+                if (apiConnected && successCount > 0) {
+                    addLogEntry(`Connected to API. Loaded ${successCount} verification codes.`, 'success');
+                    showNotification('Verification codes loaded successfully', 'success');
+                    inventoryDataLoaded = true;
+                    
+                    // Add detailed logs for each component and its verification code
+                    addLogEntry('==== Component Verification Codes ====', 'info');
+                    Object.values(componentMapping).forEach(component => {
+                        const statusIcon = component.verificationCode ? '✓' : '✗';
+                        const codeInfo = component.verificationCode ? 
+                            `Position ${component.verificationCode.length === 1 ? '5' : component.verificationCode.length === 2 ? '5-6' : '5-7'}: ${component.verificationCode}` : 
+                            'No code loaded';
+                        addLogEntry(`${statusIcon} ${component.name} (${component.itemCode}): ${codeInfo}`, 
+                            component.verificationCode ? 'success' : 'error');
+                    });
+                    addLogEntry('================================', 'info');
+                    
+                    return true;
+                } else {
+                    throw new Error('Could not fetch verification codes from API');
+                }
+            } catch (error) {
+                console.error("Error fetching verification codes:", error);
+                
+                // Cannot continue - show error message
+                addLogEntry('Cannot proceed: API connection failed. Contact IT Admin.', 'error');
+                showApiFailureMessage();
+                return false; // Stop further execution if API failed
+            }
+        }
+
+        function setupUIElements() {
+            // Get UI elements
+            barcodeInput = document.getElementById('barcodeInput');
+            scanButton = document.getElementById('scanButton');
+            completeButton = document.getElementById('completeButton');
+            restartButton = document.getElementById('restartButton');
+            progressFill = document.getElementById('progressFill');
+            progressPercentage = document.getElementById('progressPercentage');
+            logsContent = document.getElementById('logsContent');
+            
+            // Set element references for component mapping
+            const pcbElements = document.querySelectorAll('.left-pcb');
+            componentMapping.slave_pcb_1.element = pcbElements[0];
+            componentMapping.slave_pcb_2.element = pcbElements[1];
+            componentMapping.slave_pcb_3.element = pcbElements[2];
+            
+            const masterPcb = document.querySelector('.master-pcb');
+            if (masterPcb) {
+                componentMapping.master_pcb.element = masterPcb;
+            }
+            
+            const boardToBoard = document.querySelectorAll('.board-to-board');
+            if (boardToBoard.length >= 2) {
+                componentMapping.s2s_cable_1.element = boardToBoard[0];
+                componentMapping.s2s_cable_2.element = boardToBoard[1];
+            }
+            
+            const masterToRight = document.querySelector('.master-to-right');
+            if (masterToRight) {
+                componentMapping.master_to_right.element = masterToRight;
+            }
+            
+            // Get power cable element
+            const powerCable = document.querySelector('.power-cable');
+            if (powerCable) {
+                componentMapping.pc_cable.element = powerCable;
+            }
+            
+            // Add event listeners
+            scanButton.addEventListener('click', function() {
+                const barcode = barcodeInput.value;
+                handleScan(barcode);
+                barcodeInput.value = '';
+                barcodeInput.focus();
+            });
+            
+            barcodeInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const barcode = barcodeInput.value;
+                    handleScan(barcode);
+                    barcodeInput.value = '';
+                }
+            });
+            
+            completeButton.addEventListener('click', function() {
+                completeAssembly();
+            });
+            
+            restartButton.addEventListener('click', function() {
+                restartAssembly();
+            });
+        }
+
+        // Function to show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification';
+            notification.classList.add(type);
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 300);
+            }, 3000);
+        }
+        
+        // Function to add log entry
+        function addLogEntry(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.classList.add('log-item', type);
+            logItem.innerHTML = `
+                <span class="log-time">${timestamp}</span>
+                <span class="log-message">${message}</span>
+            `;
+            
+            if (logsContent) {
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            } else {
+                console.log(`${type}: ${message}`);
+            }
+        }
+
+        // Function to update progress bar
+        function updateProgress() {
+            const totalItems = Object.keys(componentMapping).length;
+            let scannedCount = Object.values(componentMapping).filter(comp => comp.scanned).length;
+            
+            const progressPercent = Math.round((scannedCount / totalItems) * 100);
+            
+            progressFill.style.width = `${progressPercent}%`;
+            progressPercentage.textContent = `${progressPercent}%`;
+        }
+
+        // Function to highlight the next component to scan
+        function highlightNextComponent() {
+            // Clear existing highlights
+            Object.values(componentMapping).forEach(comp => {
+                if (comp.element) comp.element.classList.remove('next');
+            });
+
+            // Find the next component to scan
+            const nextComponent = Object.values(componentMapping)
+                .sort((a, b) => a.index - b.index)
+                .find(comp => !comp.scanned);
+
+            if (nextComponent && nextComponent.element) {
+                nextComponent.element.classList.add('next');
+                addLogEntry(`Next scan: ${nextComponent.name}`, 'info');
+            } else {
+                completeButton.classList.remove('hidden');
+                completeButton.disabled = false;
+                addLogEntry('All components scanned successfully! Click Complete to finish.', 'success');
+                showNotification('All components verified! Assembly complete.', 'success');
+            }
+        }
+
+        // Function to verify a barcode against the expected verification code
+        function verifyBarcodeFormat(barcode, verificationCode) {
+            if (!barcode || !verificationCode) return false;
+            
+            // Position-based verification logic:
+            // - If verification code is 1 digit: Match with position 5 (index 4)
+            // - If verification code is 2 digits: Match with positions 5-6 (index 4-5)
+            // - If verification code is 3 digits: Match with positions 5-7 (index 4-6)
+            
+            console.log(`Verifying barcode: ${barcode} against code: ${verificationCode}`);
+            
+            try {
+                // Ensure barcode is at least 7 characters long for 3-digit verification
+                if (barcode.length < Math.max(5, 4 + verificationCode.length)) {
+                    console.log('Barcode too short for verification');
+                    return false;
+                }
+                
+                if (verificationCode.length === 1) {
+                    const match = barcode[4] === verificationCode;
+                    console.log(`1-digit check: Position 5 (${barcode[4]}) === ${verificationCode}: ${match}`);
+                    return match;
+                } else if (verificationCode.length === 2) {
+                    const slice = barcode.slice(4, 6);
+                    const match = slice === verificationCode;
+                    console.log(`2-digit check: Positions 5-6 (${slice}) === ${verificationCode}: ${match}`);
+                    return match;
+                } else if (verificationCode.length === 3) {
+                    const slice = barcode.slice(4, 7);
+                    const match = slice === verificationCode;
+                    console.log(`3-digit check: Positions 5-7 (${slice}) === ${verificationCode}: ${match}`);
+                    return match;
+                }
+                
+                // If verification code is longer than 3 digits, return false
+                console.log('Verification code format not supported');
+                return false;
+            } catch (error) {
+                console.error('Error during barcode verification:', error);
+                return false;
+            }
+        }
+
+        // Function to handle barcode scanning
+        function handleScan(barcode) {
+            if (!inventoryDataLoaded) {
+                showNotification('System not ready. Please wait or reload page.', 'error');
+                addLogEntry('System not ready. Verification codes not loaded.', 'error');
+                return;
+            }
+            
+            // Trim and validate the barcode input
+            barcode = barcode.trim();
+            if (!barcode) {
+                showNotification('Please scan a valid barcode', 'error');
+                return;
+            }
+            
+            // Check if this barcode has already been scanned
+            if (isDuplicateBarcode(barcode)) {
+                // Add visual feedback - flash the component that was previously scanned with this barcode
+                let duplicatedComponent = null;
+                for (const component of Object.values(componentMapping)) {
+                    if (component.scannedBarcode === barcode) {
+                        duplicatedComponent = component;
+                        break;
+                    }
+                }
+                
+                if (duplicatedComponent && duplicatedComponent.element) {
+                    // Flash the already scanned component to indicate where the duplicate is
+                    duplicatedComponent.element.classList.add('error');
+                    setTimeout(() => {
+                        duplicatedComponent.element.classList.remove('error');
+                        duplicatedComponent.element.classList.add('success');
+                    }, 800);
+                }
+                
+                showNotification(`DUPLICATE BARCODE: ${barcode} has already been scanned!`, 'error');
+                addLogEntry(`Duplicate scan rejected: ${barcode}`, 'error');
+                
+                // Make the input field flash red as additional feedback
+                barcodeInput.style.backgroundColor = '#fee2e2';
+                setTimeout(() => {
+                    barcodeInput.style.backgroundColor = '';
+                }, 800);
+                
+                return;
+            }
+            
+            // Get the next component to scan
+            const nextComponent = Object.values(componentMapping)
+                .sort((a, b) => a.index - b.index)
+                .find(comp => !comp.scanned);
+            
+            if (!nextComponent) {
+                showNotification('All components have been scanned already', 'info');
+                addLogEntry('No more components to scan', 'info');
+                return;
+            }
+            
+            // Verify the barcode format
+            if (verifyBarcodeFormat(barcode, nextComponent.verificationCode)) {
+                // Mark component as scanned
+                nextComponent.scanned = true;
+                nextComponent.scannedBarcode = barcode;
+                nextComponent.element.classList.remove('next');
+                nextComponent.element.classList.add('success');
+                
+                // Add to scanned barcodes set
+                scannedBarcodes.add(barcode);
+                
+                // Log success
+                addLogEntry(`${nextComponent.name} verified successfully: ${barcode}`, 'success');
+                showNotification(`${nextComponent.name} verified successfully!`, 'success');
+                
+                // Update progress
+                updateProgress();
+                
+                // Highlight next component
+                highlightNextComponent();
+            } else {
+                // Show error for incorrect barcode
+                nextComponent.element.classList.add('error');
+                setTimeout(() => {
+                    nextComponent.element.classList.remove('error');
+                    nextComponent.element.classList.add('next');
+                }, 1000);
+                
+                showNotification(`Invalid barcode for ${nextComponent.name}`, 'error');
+                addLogEntry(`Incorrect barcode for ${nextComponent.name}: ${barcode}`, 'error');
+            }
+        }
+
+        // Function to check if a barcode has already been scanned
+        function isDuplicateBarcode(barcode) {
+            // First check the Set of scanned barcodes
+            if (scannedBarcodes.has(barcode)) {
+                return true;
+            }
+            
+            // Also check if any component was already scanned with this barcode
+            for (const component of Object.values(componentMapping)) {
+                if (component.scannedBarcode === barcode) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Function to get assembly ID from URL parameters
+        function getAssemblyId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            
+            if (id) {
+                // If found in URL, also save to localStorage for persistence
+                localStorage.setItem('currentRSMAssemblyId', id);
+                return id;
+            }
+            
+            // Fallback to localStorage if not in URL
+            return localStorage.getItem('currentRSMAssemblyId');
+        }
+
+        function showApiFailureMessage() {
+            const errorMessage = 'API connection failed. Please contact IT Admin.';
+            addLogEntry(errorMessage, 'error');
+            showNotification(errorMessage, 'error');
+            
+            // Get component codes for technical information
+            const componentItemCodes = {};
+            Object.entries(componentMapping).forEach(([key, component]) => {
+                componentItemCodes[key] = component.itemCode;
+            });
+            
+            // Display an error message in the UI
+            document.getElementById('mainContainer').innerHTML = `
+                <div style="text-align: center; padding: 2rem; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #dc2626; margin-bottom: 1.5rem">Connection Error</h2>
+                    <div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 2rem;">
+                        <p style="color: #b91c1c; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                            <strong>Unable to connect to the inventory system.</strong>
+                        </p>
+                        <p style="color: #b91c1c;">
+                            The assembly process cannot continue without verification codes from the server.
+                            Please contact your IT Administrator for assistance.
+                        </p>
+                    </div>
+                    <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 1rem; border-radius: 0.375rem; text-align: left;">
+                        <h3 style="color: #475569; font-size: 1rem; margin-bottom: 0.75rem;">Technical Information</h3>
+                        <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Error: Failed to retrieve verification codes from API</p>
+                        <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Component IDs:</p>
+                        <ul style="color: #475569; font-size: 0.9rem; margin-left: 1.5rem; margin-bottom: 1rem;">
+                            ${Object.entries(componentItemCodes).map(([key, code]) => `<li>${key}: ${code}</li>`).join('')}
+                        </ul>
+                        <p style="color: #475569; font-size: 0.9rem;">Please provide this information to IT support.</p>
+                    </div>
+                    <button onclick="window.location.reload()"
+                            style="margin-top: 2rem; background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                   border: none; border-radius: 0.375rem; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
+            
+            inventoryDataLoaded = false;
+        }
+
+        async function completeAssembly() {
+            // Check if all components are scanned
+            const allScanned = Object.values(componentMapping).every(comp => comp.scanned);
+            if (!allScanned) {
+                showNotification('Cannot complete: some components are not scanned', 'error');
+                return;
+            }
+            
+            if (!assemblyId) {
+                showNotification('Error: No assembly ID found', 'error');
+                completeButton.disabled = false;
+                return false;
+            }
+            
+            try {
+                // Show processing message
+                showNotification('Processing...', 'info');
+                addLogEntry('Completing assembly process...', 'info');
+                
+                // Prepare data for submission
+                const assemblyData = {
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                    notes: 'Assembly completed via RSM assembly interface',
+                    operator: 'Current User',
+                    metadata: {
+                        scanned_components: Array.from(scannedBarcodes).map((barcode, index) => ({
+                            component_id: `comp_${index}`,
+                            barcode: barcode,
+                            scan_time: new Date().toISOString()
+                        }))
+                    }
+                };
+                
+                // Make the API call with proper error handling
+                const response = await fetch(`/api/assembly-process/${assemblyId}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(assemblyData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to complete assembly: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Success - show notification and redirect
+                showNotification('Assembly completed successfully!', 'success');
+                addLogEntry('Assembly completed successfully!', 'success');
+                
+                // Clear localStorage on completion
+                localStorage.removeItem('currentRSMAssemblyId');
+                
+                // Offer to start a new assembly or return to list
+                setTimeout(() => {
+                    document.getElementById('mainContainer').innerHTML = `
+                        <div style="text-align: center; padding: 2rem">
+                            <h2 style="color: #16a34a; margin-bottom: 1rem">Assembly Completed Successfully!</h2>
+                            <p style="margin-bottom: 2rem">Assembly ID: ${assemblyId}</p>
+                            <div style="display: flex; gap: 1rem; justify-content: center">
+                                <button onclick="window.location.href='/assembly/rsm'"
+                                        style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                               border: none; border-radius: 0.375rem; cursor: pointer;">
+                                    Return to Assembly List
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }, 1000);
+                
+                return true;
+            } catch (error) {
+                console.error('Error completing assembly:', error);
+                showNotification(`Failed to complete assembly: ${error.message}`, 'error');
+                addLogEntry(`Error: ${error.message}`, 'error');
+                completeButton.disabled = false;
+                return false;
+            }
+        }
+
+        async function restartAssembly() {
+            if (confirm("Are you sure you want to restart this assembly? All current progress will be lost.")) {
+                try {
+                    // Clear local storage data for this assembly
+                    localStorage.removeItem('scannedBarcodes');
+                    
+                    // Reset UI
+                    document.querySelectorAll('.success, .next, .error').forEach(el => {
+                        el.classList.remove('success', 'next', 'error');
+                    });
+                    
+                    // Reset scanned barcodes
+                    scannedBarcodes = new Set();
+                    
+                    // Reset all component states
+                    Object.values(componentMapping).forEach(component => {
+                        component.scanned = false;
+                        component.scannedBarcode = null;
+                    });
+                    
+                    // Reset progress
+                    progressFill.style.width = '0%';
+                    progressPercentage.textContent = '0%';
+                    
+                    // Clear logs
+                    logsContent.innerHTML = '';
+                    
+                    // Hide complete button
+                    completeButton.classList.add('hidden');
+                    completeButton.disabled = true;
+                    
+                    // Reset the assembly state on the server if we have an ID
+                    if (assemblyId) {
+                        await fetch(`/api/assembly-process/${assemblyId}/`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                status: 'in_progress',
+                                metadata: {
+                                    scanned_components: []
+                                }
+                            })
+                        });
+                    }
+                    
+                    // Add new log entry
+                    addLogEntry('Assembly has been restarted', 'info');
+                    showNotification('Assembly has been restarted. Start scanning from beginning.', 'info');
+                    
+                    // Highlight the first component
+                    highlightNextComponent();
+                } catch (error) {
+                    console.error('Error restarting assembly:', error);
+                    showNotification(`Failed to restart assembly: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        async function initializeAssemblyProcess() {
+            // Initialize UI elements
+            setupUIElements();
+            
+            // Fetch verification codes
+            const success = await fetchVerificationCodesFromAPI();
+            
+            if (!success) {
+                addLogEntry('Cannot proceed: API connection failed. Contact IT Admin.', 'error');
+                showApiFailureMessage();
+                return false; // Stop further execution if API failed
+            }
+
+            // Initialize the scanning process
+            highlightNextComponent();
+            return true;
+        }
+
+        function setupTooltips() {
             const cells = document.querySelectorAll('.cell');
             const tooltip = document.getElementById('tooltip');
 
             cells.forEach(cell => {
                 cell.addEventListener('mouseenter', function(e) {
-                    // Prevent tooltip for empty cells
-                    if (this.classList.contains('empty-cell')) {
-                        return;
-                    }
-
                     const tooltipText = this.getAttribute('data-tooltip');
                     if (tooltipText) {
-                        tooltip.innerHTML = tooltipText; // Use innerHTML to render <br>
+                        tooltip.textContent = tooltipText;
                         tooltip.classList.add('show');
 
                         const rect = this.getBoundingClientRect();
-                        const containerRect = document.getElementById('mainContainer').getBoundingClientRect(); // Use container for bounds
+                        const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
 
-                        // Calculate position relative to the container
-                        let tooltipLeft = rect.left - containerRect.left + (rect.width / 2) - (tooltip.offsetWidth / 2);
-                        let tooltipTop = rect.top - containerRect.top - tooltip.offsetHeight - 10; // Position above the cell
+                        tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
+                        tooltip.style.top = rect.bottom + 10 + 'px';
 
-                         // Adjust if tooltip goes off screen left/right
-                        if (tooltipLeft < 0) {
-                            tooltipLeft = 5; // Add some padding from edge
-                        } else if (tooltipLeft + tooltip.offsetWidth > containerRect.width) {
-                            tooltipLeft = containerRect.width - tooltip.offsetWidth - 5; // Add padding
+                        if (parseFloat(tooltip.style.left) < tableRect.left) {
+                            tooltip.style.left = tableRect.left + 'px';
+                        } else if (parseFloat(tooltip.style.left) + tooltip.offsetWidth > tableRect.right) {
+                            tooltip.style.left = tableRect.right - tooltip.offsetWidth + 'px';
                         }
-
-                        // Adjust if tooltip goes off screen top (prefer showing below in that case)
-                        if (tooltipTop < 0) {
-                             tooltipTop = rect.top - containerRect.top + rect.height + 10; // Position below
-                             // Update arrow direction (optional, complex) - current CSS assumes below
-                             tooltip.style.setProperty('--tooltip-arrow-border-color', 'transparent transparent var(--tooltip-bg)');
-                             tooltip.style.setProperty('--tooltip-arrow-top', '-6px');
-
-                        } else {
-                            // Ensure arrow points down if tooltip is above
-                            tooltip.style.setProperty('--tooltip-arrow-border-color', 'var(--tooltip-bg) transparent transparent');
-                            tooltip.style.setProperty('--tooltip-arrow-top', '100%'); // Position arrow at bottom pointing down
-                        }
-
-
-                        tooltip.style.left = tooltipLeft + 'px';
-                        tooltip.style.top = tooltipTop + 'px';
-
-
                     }
                 });
 
@@ -503,72 +1395,94 @@
                     tooltip.classList.remove('show');
                 });
             });
+        }
 
-            // --- Connection Line Logic (Requires Adjustment for Correct Positioning) ---
-            // This targets the first two elements with the class 'board-to-board'.
-            // The 'left' and 'width' values are likely INCORRECT for the 5RS011111 layout.
-            const boardToBoardCables = document.querySelectorAll('.board-to-board'); // Selects all cables
+        function setupConnectionLines() {
+            const boardToBoard = document.querySelectorAll('.board-to-board');
             const connectionLine1 = document.getElementById('connectionLine1');
             const connectionLine2 = document.getElementById('connectionLine2');
-            // const connectionLine3 = document.getElementById('connectionLine3'); // If adding 3rd line
+            
+            const masterToRight = document.querySelector('.master-to-right');
+            const connectionLine3 = document.getElementById('connectionLine3');
 
-            const table = document.getElementById('circuitTable');
-            const tableRect = table.getBoundingClientRect(); // Get table position once
+            if (boardToBoard.length >= 1) {
+                const line1 = boardToBoard[0];
+                line1.addEventListener('mouseenter', function() {
+                    const lineRect = line1.getBoundingClientRect();
+                    const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
 
-            if (boardToBoardCables.length > 0 && connectionLine1) {
-                const cable1 = boardToBoardCables[0]; // First cable (yellow)
-                 cable1.addEventListener('mouseenter', function() {
-                    const lineRect = cable1.getBoundingClientRect();
-                    // *** These values NEED ADJUSTMENT for the 5RS011111 layout ***
-                    connectionLine1.style.top = (lineRect.top - tableRect.top + lineRect.height / 2 - 1) + 'px'; // Center vertically
-                    connectionLine1.style.left = (lineRect.left - tableRect.left + 5) + 'px'; // Approx start (NEEDS CHECK)
-                    connectionLine1.style.width = (lineRect.width - 10) + 'px'; // Approx width (NEEDS CHECK)
-                    // *** End of values needing adjustment ***
-                    connectionLine1.style.transformOrigin = 'left'; // Ensure it scales from left
-                    connectionLine1.style.transform = 'scaleX(0)'; // Reset before animating
+                    connectionLine1.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                    connectionLine1.style.left = tableRect.left + 160 + 'px';
+                    connectionLine1.style.width = '200px';
+
                     setTimeout(() => {
-                         connectionLine1.classList.add('active');
-                    }, 10); // Small delay allows reset
+                        connectionLine1.classList.add('active');
+                    }, 50);
                 });
-                 cable1.addEventListener('mouseleave', function() {
+
+                line1.addEventListener('mouseleave', function() {
                     connectionLine1.classList.remove('active');
-                 });
-            }
-
-            if (boardToBoardCables.length > 1 && connectionLine2) {
-                const cable2 = boardToBoardCables[1]; // Second cable (yellow)
-                 cable2.addEventListener('mouseenter', function() {
-                    const lineRect = cable2.getBoundingClientRect();
-                     // *** These values NEED ADJUSTMENT for the 5RS011111 layout ***
-                    connectionLine2.style.top = (lineRect.top - tableRect.top + lineRect.height / 2 - 1) + 'px';
-                    connectionLine2.style.left = (lineRect.left - tableRect.left + 5) + 'px'; // Approx start (NEEDS CHECK)
-                    connectionLine2.style.width = (lineRect.width - 10) + 'px'; // Approx width (NEEDS CHECK)
-                     // *** End of values needing adjustment ***
-                    connectionLine2.style.transformOrigin = 'left';
-                    connectionLine2.style.transform = 'scaleX(0)';
-                    setTimeout(() => {
-                         connectionLine2.classList.add('active');
-                    }, 10);
                 });
-                 cable2.addEventListener('mouseleave', function() {
-                    connectionLine2.classList.remove('active');
-                 });
             }
 
-            // Add similar logic for connectionLine3 and boardToBoardCables[2] if needed
+            if (boardToBoard.length >= 2) {
+                const line2 = boardToBoard[1];
+                line2.addEventListener('mouseenter', function() {
+                    const lineRect = line2.getBoundingClientRect();
+                    const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
 
-            // --- End Connection Line Logic ---
+                    connectionLine2.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                    connectionLine2.style.left = tableRect.left + 400 + 'px';
+                    connectionLine2.style.width = '200px';
 
-            // Add transition class after initial render to avoid seeing initial positioning
+                    setTimeout(() => {
+                        connectionLine2.classList.add('active');
+                    }, 50);
+                });
+
+                line2.addEventListener('mouseleave', function() {
+                    connectionLine2.classList.remove('active');
+                });
+            }
+            
+            if (masterToRight) {
+                masterToRight.addEventListener('mouseenter', function() {
+                    const lineRect = masterToRight.getBoundingClientRect();
+                    const tableRect = document.getElementById('circuitTable').getBoundingClientRect();
+
+                    connectionLine3.style.top = lineRect.top - tableRect.top + 15 + 'px';
+                    connectionLine3.style.left = tableRect.left + 640 + 'px';
+                    connectionLine3.style.width = '180px';
+
+                    setTimeout(() => {
+                        connectionLine3.classList.add('active');
+                    }, 50);
+                });
+
+                masterToRight.addEventListener('mouseleave', function() {
+                    connectionLine3.classList.remove('active');
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add smooth transitions to cells
             setTimeout(() => {
-                 const allCells = document.querySelectorAll('.circuit-table td');
-                 allCells.forEach(c => {
-                    c.style.transition = 'all var(--transition-speed) ease';
-                 });
-                 if(connectionLine1) connectionLine1.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-                 if(connectionLine2) connectionLine2.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-                 // if(connectionLine3) connectionLine3.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-            }, 50); // Short delay
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach(cell => {
+                    cell.style.transition = 'all 0.3s ease';
+                });
+            }, 500);
+
+            // Setup tooltips and connection lines
+            setupTooltips();
+            setupConnectionLines();
+
+            // Get assembly ID from URL or localStorage
+            assemblyId = getAssemblyId();
+
+            // Initialize the assembly process
+            initializeAssemblyProcess();
         });
     </script>
 </body>

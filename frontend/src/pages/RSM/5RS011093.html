@@ -3,18 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive YBS Machine Circuit Board Layout - 5RS011093</title>
+    <title>RSM Assembly - 5RS011093</title>
     <style>
         :root {
             /* PCB Colors */
             --left-pcb-color: #d9f9d9; /* Light Green for Slave */
-            /* --master-pcb-color: #d3d3d3; /* Grey for Master - Not used */
-
+            
             /* Cable Colors */
             --board-to-board-yellow: #fff3cd; /* Yellow for Slave-Slave */
             --board-to-board-color: #999; /* Fallback/Base */
             --power-cable-color: #e0cffc; /* Light Purple for P&C Cable */
-
+            
+            /* Status Colors */
+            --status-success: #4caf50;
+            --status-error: #f44336;
+            --status-warning: #ff9800;
+            --status-info: #2196f3;
+            
             /* Other Styles */
             --highlight-yellow: #ffeb3b;
             --border-color: #aaa;
@@ -84,7 +89,7 @@
             font-weight: 600;
             font-size: 0.875rem;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            line-height: 1.3; /* Adjusted for multi-line */
+            line-height: 1.3;
         }
 
         .board-to-board-title {
@@ -167,7 +172,7 @@
             z-index: 100;
         }
 
-        .left-pcb { /* Slave PCB - Light Green */
+        .left-pcb {
             background-color: var(--left-pcb-color);
             font-size: 0.7rem;
             font-weight: 500;
@@ -187,10 +192,8 @@
             background: linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.1), rgba(0,0,0,0.05));
         }
 
-        /* Removed .master-pcb styles */
-
-        .board-to-board { /* Base style for connection cables */
-            color: var(--text-color-dark); /* Default text color */
+        .board-to-board {
+            color: var(--text-color-dark);
             font-size: 0.7rem;
             font-weight: 500;
             line-height: 1.2;
@@ -198,11 +201,11 @@
             background-image: linear-gradient(to bottom, rgba(0,0,0,0.05), transparent);
         }
 
-        .board-to-board-yellow { /* Slave-to-Slave Cable - Yellow */
+        .board-to-board-yellow {
             background-color: var(--board-to-board-yellow);
         }
 
-        .power-cable { /* P&C Cable - Purple */
+        .power-cable {
             background-color: var(--power-cable-color);
             color: var(--text-color-dark);
             font-weight: 600;
@@ -215,12 +218,12 @@
             background-color: #ffffff;
             cursor: default;
         }
+        
         .empty-cell:hover {
              transform: none;
              box-shadow: none;
              z-index: auto;
         }
-
 
         .circuit-lines {
             position: absolute;
@@ -232,7 +235,7 @@
             z-index: 5;
         }
 
-        .circuit-lines::before { /* Subtle background pattern */
+        .circuit-lines::before {
             content: '';
             position: absolute;
             top: 0;
@@ -248,7 +251,7 @@
             background-size: 100px 100px;
         }
 
-        .glow { /* Subtle gradient glow */
+        .glow {
             position: absolute;
             top: 0;
             left: 0;
@@ -273,11 +276,6 @@
             opacity: 0;
             pointer-events: none;
             transition: all 0.2s ease;
-            white-space: normal;
-             /* For dynamic arrow positioning - default above */
-            --tooltip-arrow-border-color: var(--tooltip-bg) transparent transparent;
-            --tooltip-arrow-top: 100%;
-            --tooltip-arrow-bottom: auto;
         }
 
         .tooltip.show {
@@ -285,18 +283,16 @@
             transform: translateY(0);
         }
 
-        .tooltip::after { /* Arrow */
+        .tooltip::after {
             content: '';
             position: absolute;
+            top: -6px;
             left: 50%;
             transform: translateX(-50%);
-            border-width: 6px;
+            border-width: 0 6px 6px;
             border-style: solid;
-            border-color: var(--tooltip-arrow-border-color);
-            top: var(--tooltip-arrow-top);
-            bottom: var(--tooltip-arrow-bottom);
+            border-color: transparent transparent var(--tooltip-bg);
         }
-
 
         .connection-line {
             position: absolute;
@@ -306,7 +302,6 @@
             transform-origin: left;
             transform: scaleX(0);
             pointer-events: none;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         .connection-line.active {
@@ -314,32 +309,287 @@
             box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
         }
 
-
-        @media (max-width: 992px) {
-            .container { padding: 1rem; }
-            .component-name { width: 6rem; font-size: 0.7rem; }
-            .left-pcb { font-size: 0.65rem; padding: 0.5rem 0.125rem; }
-            .board-to-board, .board-to-board-yellow { font-size: 0.65rem; padding: 0.5rem 0.125rem; }
-            .power-cable { font-size: 0.75rem; }
+        .cell.success {
+            background-color: var(--status-success);
+            color: white;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.6);
+            animation: successPulse 2s ease-in-out;
         }
 
-        @media (max-width: 768px) {
-            .title { font-size: 1.5rem; }
-            .board-to-board-title { font-size: 1.75rem; }
-            .circuit-table { font-size: 0.65rem; }
-            .circuit-table td { font-size: 0.65rem; }
-            .component-name { width: 5rem; font-size: 0.65rem; }
-            .left-pcb { font-size: 0.6rem; }
-            .board-to-board, .board-to-board-yellow { font-size: 0.6rem; line-height: 1.1; }
-            .power-cable { font-size: 0.7rem; }
+        @keyframes successPulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.8); }
+            70% { box-shadow: 0 0 10px 10px rgba(76, 175, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+        }
+
+        .cell.error {
+            background-color: var(--status-error);
+            color: white;
+            animation: errorShake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+
+        .cell.next {
+            background-color: var(--highlight-yellow);
+            animation: nextPulse 2s infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cell.next::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes nextPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0.7); }
+            70% { box-shadow: 0 0 10px 10px rgba(255, 235, 59, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 235, 59, 0); }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .scan-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #f1f5f9;
+            border-radius: 0.5rem;
+            border: 1px solid #cbd5e1;
+        }
+
+        .scan-input-container {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .scan-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+        }
+
+        .scan-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .scan-button:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .scan-button:active {
+            transform: translateY(0);
+        }
+
+        .progress-container {
+            margin-bottom: 1rem;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-label {
+            font-weight: 600;
+        }
+
+        .progress-bar {
+            height: 0.75rem;
+            background-color: #e2e8f0;
+            border-radius: 0.375rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #3b82f6;
+            border-radius: 0.375rem;
+            transition: width 0.5s ease;
+        }
+
+        .logs-container {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-header {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.375rem;
+        }
+
+        .log-item {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .log-time {
+            color: #64748b;
+        }
+
+        .log-item.success .log-message {
+            color: #16a34a;
+        }
+
+        .log-item.error .log-message {
+            color: #dc2626;
+        }
+
+        .log-item.warning .log-message {
+            color: #ea580c;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 9999;
+            font-size: 0.95rem;
+            transform: translateY(20px);
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification.success {
+            background-color: #10b981;
+            color: white;
+            border-left: 5px solid #059669;
+        }
+
+        .notification.error {
+            background-color: #ef4444;
+            color: white;
+            border-left: 5px solid #b91c1c;
+        }
+
+        .notification.info {
+            background-color: #3b82f6;
+            color: white;
+            border-left: 5px solid #2563eb;
+        }
+
+        .notification.warning {
+            background-color: #f59e0b;
+            color: white;
+            border-left: 5px solid #d97706;
+        }
+
+        .complete-button {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .complete-button:hover {
+            background-color: #15803d;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .complete-button:active {
+            transform: translateY(0);
+        }
+
+        .complete-button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none;
+        }
+        
+        .restart-button {
+            margin-top: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #f59e0b;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .restart-button:hover {
+            background-color: #d97706;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .restart-button:active {
+            transform: translateY(0);
         }
     </style>
 </head>
 <body>
     <div class="container" id="mainContainer">
         <div class="header">
-            <div class="part-id">5RS011093 <br> 3S <br> V1</div>
-            <h1 class="title">RAP - ILI DUCT ASSEMBLY</h1> <!-- Title kept generic -->
+            <div class="part-id">5RS011093 <br> 3Slave <br> 70 mm</div>
+            <h1 class="title">RAP - ILI DUCT ASSEMBLY</h1>
         </div>
 
         <div class="board-to-board-title">Board to Board</div>
@@ -351,112 +601,617 @@
             <tbody>
                 <tr>
                     <td class="component-name">PCB BOARD</td>
-                    <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
-                    <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
-                    <td class="left-pcb cell" colspan="8" data-tooltip="Assembled RSM SLAVE PCB BL Ver - T">Assembled RSM SLAVE PCB BL Ver - T</td>
+                    <td class="left-pcb cell" id="slave-pcb-1" colspan="8" data-tooltip="RSM SLAVE PCB ASSEMBLY - V2">RSM SLAVE PCB ASSEMBLY - V2</td>
+                    <td class="left-pcb cell" id="slave-pcb-2" colspan="8" data-tooltip="RSM SLAVE PCB ASSEMBLY - V2">RSM SLAVE PCB ASSEMBLY - V2</td>
+                    <td class="left-pcb cell" id="slave-pcb-3" colspan="8" data-tooltip="RSM SLAVE PCB ASSEMBLY - V2">RSM SLAVE PCB ASSEMBLY - V2</td>
                 </tr>
                 <tr>
                     <td class="component-name">Joining Cable</td>
-                    <td class="cell empty-cell" colspan="6"></td> <!-- Space before 1st cable -->
-                    <td class="cell board-to-board board-to-board-yellow" colspan="4" data-tooltip="Slave to slave PCB (10-12) - 250MM">Slave to slave PCB <br>(10-12) - 250MM</td>
-                    <td class="cell empty-cell" colspan="4"></td> <!-- Space between 1st & 2nd -->
-                    <td class="cell board-to-board board-to-board-yellow" colspan="4" data-tooltip="Slave to slave PCB (10-12) - 250MM">Slave to slave PCB <br>(10-12) - 250MM</td>
-                    <td class="cell empty-cell" colspan="6"></td> <!-- Space after 2nd cable -->
-                 </tr>
+                    <td class="cell empty-cell" colspan="6"></td>
+                    <td class="cell board-to-board board-to-board-yellow" id="s2s-cable-1" colspan="4" data-tooltip="RSM - RMC CABLE ASSEMBLY - SLAVE TO SLAVE PCB (10-12) - 250MM - (70MM PITCH) - V2">Slave to slave PCB <br>(10-12) - 250MM</td>
+                    <td class="cell empty-cell" colspan="4"></td>
+                    <td class="cell board-to-board board-to-board-yellow" id="s2s-cable-2" colspan="4" data-tooltip="RSM - RMC CABLE ASSEMBLY - SLAVE TO SLAVE PCB (10-12) - 250MM - (70MM PITCH) - V2">Slave to slave PCB <br>(10-12) - 250MM</td>
+                    <td class="cell empty-cell" colspan="6"></td>
+                </tr>
                 <tr>
                     <td class="component-name">P&C Cable</td>
-                    <td class="power-cable cell" colspan="24" data-tooltip="RSM - POWER & COMMUNICATION CABLE ASSY WITHOUT RMC - (70MM PITCH) - V2">RSM - POWER & COMMUNICATION CABLE ASSY WITHOUT RMC - (70MM PITCH) - V2</td>
+                    <td class="power-cable cell" id="pc-cable" colspan="24" data-tooltip="RSM - POWER & COMMUNICATION CABLE ASSY WITHOUT RMC - (70MM PITCH) - V2">RSM - POWER & COMMUNICATION CABLE ASSY WITHOUT RMC - (70MM PITCH) - V2</td>
                 </tr>
             </tbody>
         </table>
 
         <div id="tooltip" class="tooltip"></div>
-        <!-- Connection lines - JS targets first two by default. Positions may need tuning. -->
         <div id="connectionLine1" class="connection-line"></div>
         <div id="connectionLine2" class="connection-line"></div>
+
+        <div class="scan-section">
+            <h2 class="text-xl font-semibold mb-4">Component Verification</h2>
+            
+            <div class="scan-input-container">
+                <input type="text" id="barcodeInput" class="scan-input" placeholder="Scan component barcode..." autofocus>
+                <button id="scanButton" class="scan-button">Verify</button>
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-header">
+                    <div class="progress-label">Assembly Progress</div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="logs-container">
+                <div class="log-header">Assembly Logs</div>
+                <div id="logsContent"></div>
+            </div>
+            
+            <button id="completeButton" class="complete-button hidden" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                Complete Assembly
+            </button>
+            
+            <button id="restartButton" class="restart-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 4v6h6"></path>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Restart Assembly
+            </button>
+        </div>
+        <div id="notification" class="notification"></div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const cells = document.querySelectorAll('.cell');
-            const tooltip = document.getElementById('tooltip');
-            const mainContainer = document.getElementById('mainContainer');
+            const API_URL = '/api';
+            let inventoryDataLoaded = false;
 
-            cells.forEach(cell => {
-                cell.addEventListener('mouseenter', function(e) {
-                    if (this.classList.contains('empty-cell')) return;
+            // Component mapping with the specified item codes
+            const components = {
+                "slave_pcb_1": {
+                    itemCode: "4RS013152", // Slave PCB
+                    name: "Slave PCB 1",
+                    element: document.getElementById('slave-pcb-1'),
+                    verificationCode: "",
+                    scanned: false,
+                    scannedBarcode: null,
+                    index: 1
+                },
+                "slave_pcb_2": {
+                    itemCode: "4RS013152", // Slave PCB
+                    name: "Slave PCB 2",
+                    element: document.getElementById('slave-pcb-2'),
+                    verificationCode: "",
+                    scanned: false,
+                    scannedBarcode: null,
+                    index: 2
+                },
+                "slave_pcb_3": {
+                    itemCode: "4RS013152", // Slave PCB
+                    name: "Slave PCB 3",
+                    element: document.getElementById('slave-pcb-3'),
+                    verificationCode: "",
+                    scanned: false,
+                    scannedBarcode: null,
+                    index: 3
+                },
+                "s2s_cable_1": {
+                    itemCode: "4RS013159", // Slave to Slave Cable
+                    name: "Slave to Slave Cable 1",
+                    element: document.getElementById('s2s-cable-1'),
+                    verificationCode: "",
+                    scanned: false,
+                    scannedBarcode: null,
+                    index: 4
+                },
+                "s2s_cable_2": {
+                    itemCode: "4RS013159", // Slave to Slave Cable
+                    name: "Slave to Slave Cable 2",
+                    element: document.getElementById('s2s-cable-2'),
+                    verificationCode: "",
+                    scanned: false,
+                    scannedBarcode: null,
+                    index: 5
+                },
+                "pc_cable": {
+                    itemCode: "4RS013158", // Power & Communication Cable
+                    name: "Power & Communication Cable",
+                    element: document.getElementById('pc-cable'),
+                    verificationCode: "",
+                    scanned: false,
+                    scannedBarcode: null,
+                    index: 6
+                }
+            };
 
-                    const tooltipText = this.getAttribute('data-tooltip');
-                    if (tooltipText) {
-                        tooltip.innerHTML = tooltipText;
-                        tooltip.classList.add('show');
+            // Keep track of scanned barcodes to prevent duplicates
+            let scannedBarcodes = new Set();
+            
+            // UI elements
+            const barcodeInput = document.getElementById('barcodeInput');
+            const scanButton = document.getElementById('scanButton');
+            const completeButton = document.getElementById('completeButton');
+            const restartButton = document.getElementById('restartButton');
+            const progressFill = document.getElementById('progressFill');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const logsContent = document.getElementById('logsContent');
 
-                        const rect = this.getBoundingClientRect();
-                        const containerRect = mainContainer.getBoundingClientRect();
+            // Function to show notification
+            function showNotification(message, type = 'info') {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = 'notification';
+                notification.classList.add(type);
+                notification.style.display = 'block';
+                
+                setTimeout(() => {
+                    notification.classList.add('show');
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => {
+                        notification.style.display = 'none';
+                    }, 300);
+                }, 3000);
+            }
+            
+            // Function to add log entry
+            function addLogEntry(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logItem = document.createElement('div');
+                logItem.classList.add('log-item', type);
+                logItem.innerHTML = `
+                    <span class="log-time">${timestamp}</span>
+                    <span class="log-message">${message}</span>
+                `;
+                logsContent.appendChild(logItem);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            }
 
-                        // Try positioning above first
-                        let tooltipTop = rect.top - containerRect.top - tooltip.offsetHeight - 10;
-                        let arrowPointsDown = true;
+            // Function to update progress bar
+            function updateProgress() {
+                const totalItems = Object.keys(components).length;
+                let scannedCount = Object.values(components).filter(comp => comp.scanned).length;
+                
+                const progressPercent = Math.round((scannedCount / totalItems) * 100);
+                
+                progressFill.style.width = `${progressPercent}%`;
+                progressPercentage.textContent = `${progressPercent}%`;
+            }
 
-                        // If not enough space above, position below
-                        if (tooltipTop < 0 || (tooltipTop < 10 && (rect.bottom + tooltip.offsetHeight + 20) < containerRect.height)) {
-                             tooltipTop = rect.top - containerRect.top + rect.height + 10;
-                             arrowPointsDown = false;
-                        }
+            // Function to highlight the next component to scan
+            function highlightNextComponent() {
+                // Clear existing highlights
+                Object.values(components).forEach(comp => {
+                    if (comp.element) comp.element.classList.remove('next');
+                });
 
-                        // Adjust horizontal position & check bounds
-                        let tooltipLeft = rect.left - containerRect.left + (rect.width / 2) - (tooltip.offsetWidth / 2);
-                        if (tooltipLeft < 5) tooltipLeft = 5;
-                        else if (tooltipLeft + tooltip.offsetWidth > containerRect.width - 5) {
-                            tooltipLeft = containerRect.width - tooltip.offsetWidth - 5;
-                        }
+                // Find the next component to scan
+                const nextComponent = Object.values(components)
+                    .sort((a, b) => a.index - b.index)
+                    .find(comp => !comp.scanned);
 
-                        tooltip.style.left = tooltipLeft + 'px';
-                        tooltip.style.top = tooltipTop + 'px';
+                if (nextComponent && nextComponent.element) {
+                    nextComponent.element.classList.add('next');
+                    addLogEntry(`Next scan: ${nextComponent.name}`, 'info');
+                } else {
+                    completeButton.classList.remove('hidden');
+                    completeButton.disabled = false;
+                    addLogEntry('All components scanned successfully! Click Complete to finish.', 'success');
+                    showNotification('All components verified! Assembly complete.', 'success');
+                }
+            }
 
-                        // Set CSS variables for arrow direction
-                        if (arrowPointsDown) {
-                            tooltip.style.setProperty('--tooltip-arrow-border-color', 'var(--tooltip-bg) transparent transparent');
-                            tooltip.style.setProperty('--tooltip-arrow-top', '100%');
-                            tooltip.style.setProperty('--tooltip-arrow-bottom', 'auto');
-                        } else {
-                             tooltip.style.setProperty('--tooltip-arrow-border-color', 'transparent transparent var(--tooltip-bg)');
-                             tooltip.style.setProperty('--tooltip-arrow-top', 'auto');
-                             tooltip.style.setProperty('--tooltip-arrow-bottom', '100%');
+            // Function to fetch verification codes from API
+            async function fetchVerificationCodes() {
+                try {
+                    addLogEntry("Connecting to inventory API...", "info");
+                    
+                    // Create an array of promises for parallel fetching
+                    let successCount = 0;
+                    const fetchPromises = [];
+                    
+                    for (const [key, comp] of Object.entries(components)) {
+                        const fetchPromise = fetch(`${API_URL}/item-master/?search=${comp.itemCode}`)
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error(`Failed to fetch for ${comp.name}`);
+                                }
+                                return response.json();
+                            })
+                            .then(data => {
+                                if (data && data.length > 0) {
+                                    comp.verificationCode = data[0].code || "";
+                                    if (comp.verificationCode) {
+                                        successCount++;
+                                        return { success: true, key };
+                                    }
+                                }
+                                return { success: false, key };
+                            })
+                            .catch(error => {
+                                console.error(`Error fetching data for ${key}:`, error);
+                                return { success: false, key, error };
+                            });
+                        
+                        fetchPromises.push(fetchPromise);
+                    }
+                    
+                    // Wait for all fetch operations to complete
+                    await Promise.all(fetchPromises);
+                    
+                    // Check if we had any successful API calls
+                    if (successCount > 0) {
+                        addLogEntry(`Connected to API. Loaded ${successCount} verification codes.`, 'success');
+                        showNotification('Verification codes loaded successfully', 'success');
+                        inventoryDataLoaded = true;
+                        
+                        // Add detailed logs for each component and its verification code
+                        addLogEntry('==== Component Verification Codes ====', 'info');
+                        Object.values(components).forEach(component => {
+                            const statusIcon = component.verificationCode ? '✓' : '✗';
+                            const codeInfo = component.verificationCode ? 
+                                `Position ${component.verificationCode.length === 1 ? '5' : component.verificationCode.length === 2 ? '5-6' : '5-7'}: ${component.verificationCode}` : 
+                                'No code loaded';
+                            addLogEntry(`${statusIcon} ${component.name} (${component.itemCode}): ${codeInfo}`, 
+                                component.verificationCode ? 'success' : 'error');
+                        });
+                        addLogEntry('================================', 'info');
+                        
+                        return true;
+                    } else {
+                        throw new Error('Could not fetch verification codes from API');
+                    }
+                } catch (error) {
+                    console.error("Error fetching verification codes:", error);
+                    showApiFailureMessage();
+                    return false; // Stop further execution if API failed
+                }
+            }
+
+            // Function to verify a barcode against the expected verification code
+            function verifyBarcodeFormat(barcode, verificationCode) {
+                if (!barcode || !verificationCode) return false;
+                
+                try {
+                    // Ensure barcode is at least 7 characters long for 3-digit verification
+                    if (barcode.length < 7 && verificationCode.length > barcode.length - 4) {
+                        console.log('Barcode too short for verification');
+                        return false;
+                    }
+                    
+                    if (verificationCode.length === 1) {
+                        return barcode[4] === verificationCode;
+                    } else if (verificationCode.length === 2) {
+                        return barcode.slice(4, 6) === verificationCode;
+                    } else if (verificationCode.length === 3) {
+                        return barcode.slice(4, 7) === verificationCode;
+                    }
+                    
+                    // If verification code is longer than 3 digits, return false
+                    return false;
+                } catch (error) {
+                    console.error('Error during barcode verification:', error);
+                    return false;
+                }
+            }
+
+            // Function to handle barcode scanning
+            function handleScan(barcode) {
+                if (!inventoryDataLoaded) {
+                    showNotification('System not ready. Please wait or reload page.', 'error');
+                    addLogEntry('System not ready. Verification codes not loaded.', 'error');
+                    return;
+                }
+                
+                // Trim and validate the barcode input
+                barcode = barcode.trim();
+                if (!barcode) {
+                    showNotification('Please scan a valid barcode', 'error');
+                    return;
+                }
+                
+                // Check if this barcode has already been scanned
+                if (isDuplicateBarcode(barcode)) {
+                    // Find which component was previously scanned with this barcode
+                    let duplicatedComponent = null;
+                    for (const component of Object.values(components)) {
+                        if (component.scannedBarcode === barcode) {
+                            duplicatedComponent = component;
+                            break;
                         }
                     }
-                });
+                    
+                    if (duplicatedComponent && duplicatedComponent.element) {
+                        // Flash the already scanned component
+                        duplicatedComponent.element.classList.add('error');
+                        setTimeout(() => {
+                            duplicatedComponent.element.classList.remove('error');
+                            duplicatedComponent.element.classList.add('success');
+                        }, 800);
+                    }
+                    
+                    showNotification(`DUPLICATE BARCODE: ${barcode} has already been scanned!`, 'error');
+                    addLogEntry(`Duplicate scan rejected: ${barcode}`, 'error');
+                    
+                    // Make the input field flash red as additional feedback
+                    barcodeInput.style.backgroundColor = '#fee2e2';
+                    setTimeout(() => {
+                        barcodeInput.style.backgroundColor = '';
+                    }, 800);
+                    
+                    return;
+                }
+                
+                // Get the next component to scan
+                const nextComponent = Object.values(components)
+                    .sort((a, b) => a.index - b.index)
+                    .find(comp => !comp.scanned);
+                
+                if (!nextComponent) {
+                    showNotification('All components have been scanned already', 'info');
+                    addLogEntry('No more components to scan', 'info');
+                    return;
+                }
+                
+                // Verify the barcode format
+                if (verifyBarcodeFormat(barcode, nextComponent.verificationCode)) {
+                    // Mark component as scanned
+                    nextComponent.scanned = true;
+                    nextComponent.scannedBarcode = barcode;
+                    nextComponent.element.classList.remove('next');
+                    nextComponent.element.classList.add('success');
+                    
+                    // Add to scanned barcodes set
+                    scannedBarcodes.add(barcode);
+                    
+                    // Log success
+                    addLogEntry(`${nextComponent.name} verified successfully: ${barcode}`, 'success');
+                    showNotification(`${nextComponent.name} verified successfully!`, 'success');
+                    
+                    // Update progress
+                    updateProgress();
+                    
+                    // Highlight next component
+                    highlightNextComponent();
+                } else {
+                    // Show error for incorrect barcode
+                    nextComponent.element.classList.add('error');
+                    setTimeout(() => {
+                        nextComponent.element.classList.remove('error');
+                        nextComponent.element.classList.add('next');
+                    }, 1000);
+                    
+                    showNotification(`Invalid barcode for ${nextComponent.name}`, 'error');
+                    addLogEntry(`Incorrect barcode for ${nextComponent.name}: ${barcode}`, 'error');
+                }
+            }
 
-                cell.addEventListener('mouseleave', function() {
-                    tooltip.classList.remove('show');
-                });
-            });
+            // Function to check if a barcode has already been scanned
+            function isDuplicateBarcode(barcode) {
+                // First check the Set of scanned barcodes
+                if (scannedBarcodes.has(barcode)) {
+                    return true;
+                }
+                
+                // Also check if any component was already scanned with this barcode
+                for (const component of Object.values(components)) {
+                    if (component.scannedBarcode === barcode) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
 
-            // --- Connection Line Logic (May need position adjustments) ---
+            function showApiFailureMessage() {
+                const errorMessage = 'API connection failed. Please contact IT Admin.';
+                addLogEntry(errorMessage, 'error');
+                showNotification(errorMessage, 'error');
+                
+                // Get component codes for technical information
+                const componentItemCodes = {};
+                Object.entries(components).forEach(([key, component]) => {
+                    componentItemCodes[key] = component.itemCode;
+                });
+                
+                // Display an error message in the UI
+                document.getElementById('mainContainer').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #dc2626; margin-bottom: 1.5rem">Connection Error</h2>
+                        <div style="background-color: #fee2e2; border: 1px solid #ef4444; padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 2rem;">
+                            <p style="color: #b91c1c; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                                <strong>Unable to connect to the inventory system.</strong>
+                            </p>
+                            <p style="color: #b91c1c;">
+                                The assembly process cannot continue without verification codes from the server.
+                                Please contact your IT Administrator for assistance.
+                            </p>
+                        </div>
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 1rem; border-radius: 0.375rem; text-align: left;">
+                            <h3 style="color: #475569; font-size: 1rem; margin-bottom: 0.75rem;">Technical Information</h3>
+                            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Error: Failed to retrieve verification codes from API</p>
+                            <p style="color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem;">Component IDs:</p>
+                            <ul style="color: #475569; font-size: 0.9rem; margin-left: 1.5rem; margin-bottom: 1rem;">
+                                ${Object.entries(componentItemCodes).map(([key, code]) => `<li>${key}: ${code}</li>`).join('')}
+                            </ul>
+                            <p style="color: #475569; font-size: 0.9rem;">Please provide this information to IT support.</p>
+                        </div>
+                        <button onclick="window.location.reload()"
+                                style="margin-top: 2rem; background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                       border: none; border-radius: 0.375rem; cursor: pointer;">
+                            Try Again
+                        </button>
+                    </div>
+                `;
+                
+                inventoryDataLoaded = false;
+            }
+
+            function restartAssembly() {
+                if (confirm("Are you sure you want to restart this assembly? All current progress will be lost.")) {
+                    // Reset scanned barcodes
+                    scannedBarcodes = new Set();
+                    
+                    // Reset all component states
+                    Object.values(components).forEach(component => {
+                        component.scanned = false;
+                        component.scannedBarcode = null;
+                        if (component.element) {
+                            component.element.classList.remove('success', 'next', 'error');
+                        }
+                    });
+                    
+                    // Reset progress
+                    progressFill.style.width = '0%';
+                    progressPercentage.textContent = '0%';
+                    
+                    // Clear input
+                    barcodeInput.value = '';
+                    
+                    // Hide complete button
+                    completeButton.classList.add('hidden');
+                    completeButton.disabled = true;
+                    
+                    // Add log entry
+                    addLogEntry('Assembly has been restarted', 'info');
+                    showNotification('Assembly has been restarted. Start scanning from beginning.', 'info');
+                    
+                    // Highlight the first component
+                    highlightNextComponent();
+                }
+            }
+
+            function completeAssembly() {
+                // Check if all components are scanned
+                const allScanned = Object.values(components).every(comp => comp.scanned);
+                if (!allScanned) {
+                    showNotification('Cannot complete: some components are not scanned', 'error');
+                    return;
+                }
+                
+                // Show completion message
+                document.getElementById('mainContainer').innerHTML = `
+                    <div style="text-align: center; padding: 2rem;">
+                        <h2 style="color: #16a34a; font-size: 1.5rem; margin-bottom: 1rem;">Assembly Completed Successfully!</h2>
+                        <p style="margin-bottom: 2rem;">All components have been verified and the assembly is complete.</p>
+                        <div style="margin-top: 1.5rem;">
+                            <button onclick="window.location.href='/assembly/rsm'"
+                                    style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
+                                           border: none; border-radius: 0.375rem; cursor: pointer;">
+                                Return to Assembly List
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Initialize the page
+            async function initialize() {
+                addLogEntry('Initializing assembly process...', 'info');
+                
+                // Set up tooltip functionality
+                const cells = document.querySelectorAll('.cell');
+                const tooltip = document.getElementById('tooltip');
+                
+                cells.forEach(cell => {
+                    if (cell.classList.contains('empty-cell')) return;
+                    
+                    cell.addEventListener('mouseenter', function(e) {
+                        const tooltipText = this.getAttribute('data-tooltip');
+                        if (tooltipText) {
+                            tooltip.textContent = tooltipText;
+                            tooltip.classList.add('show');
+                            
+                            const rect = this.getBoundingClientRect();
+                            const containerRect = document.querySelector('.container').getBoundingClientRect();
+                            
+                            tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
+                            tooltip.style.top = rect.bottom + 10 + 'px';
+                            
+                            if (parseFloat(tooltip.style.left) < containerRect.left) {
+                                tooltip.style.left = containerRect.left + 10 + 'px';
+                            } else if (parseFloat(tooltip.style.left) + tooltip.offsetWidth > containerRect.right) {
+                                tooltip.style.left = containerRect.right - tooltip.offsetWidth - 10 + 'px';
+                            }
+                        }
+                    });
+                    
+                    cell.addEventListener('mouseleave', function() {
+                        tooltip.classList.remove('show');
+                    });
+                });
+                
+                // Set up event listeners
+                scanButton.addEventListener('click', function() {
+                    const barcode = barcodeInput.value;
+                    handleScan(barcode);
+                    barcodeInput.value = '';
+                    barcodeInput.focus();
+                });
+                
+                barcodeInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        const barcode = barcodeInput.value;
+                        handleScan(barcode);
+                        barcodeInput.value = '';
+                    }
+                });
+                
+                completeButton.addEventListener('click', function() {
+                    completeAssembly();
+                });
+                
+                restartButton.addEventListener('click', function() {
+                    restartAssembly();
+                });
+                
+                // Fetch verification codes
+                const success = await fetchVerificationCodes();
+                
+                if (success) {
+                    // Highlight first component
+                    highlightNextComponent();
+                }
+            }
+            
+            // Start initialization
+            initialize();
+            
+            // Set up visualization effects for connection lines
             const boardToBoardCables = document.querySelectorAll('.board-to-board');
             const connectionLine1 = document.getElementById('connectionLine1');
             const connectionLine2 = document.getElementById('connectionLine2');
             const table = document.getElementById('circuitTable');
 
-            function setupConnectionLine(cableElement, lineElement) {
+            function setupConnectionLine(cableElement, lineElement, index) {
                 if (!cableElement || !lineElement) return;
 
-                const tableRect = table.getBoundingClientRect();
-
                 cableElement.addEventListener('mouseenter', function() {
-                    const lineRect = cableElement.getBoundingClientRect();
-                    const cableStyle = window.getComputedStyle(cableElement);
-                    const paddingLeft = parseFloat(cableStyle.paddingLeft);
-                    const paddingRight = parseFloat(cableStyle.paddingRight);
+                    const cableRect = cableElement.getBoundingClientRect();
+                    const tableRect = table.getBoundingClientRect();
+                    
+                    // Calculate line position based on cable position
+                    lineElement.style.top = (cableRect.top - tableRect.top + cableRect.height/2) + 'px';
+                    
+                    // Adjust based on which connection this is
+                    if (index === 0) {
+                        lineElement.style.left = (tableRect.left + 180) + 'px';
+                        lineElement.style.width = '160px';
+                    } else if (index === 1) {
+                        lineElement.style.left = (tableRect.left + 380) + 'px';
+                        lineElement.style.width = '160px';
+                    }
 
-                    // Attempt dynamic positioning (tune if needed)
-                    lineElement.style.top = (lineRect.top - tableRect.top + lineRect.height / 2 - 1) + 'px';
-                    lineElement.style.left = (lineRect.left - tableRect.left + paddingLeft) + 'px';
-                    lineElement.style.width = (lineRect.width - paddingLeft - paddingRight) + 'px';
-
-                    lineElement.style.transformOrigin = 'left';
-                    lineElement.style.transform = 'scaleX(0)';
-                    setTimeout(() => { lineElement.classList.add('active'); }, 10);
+                    setTimeout(() => {
+                        lineElement.classList.add('active');
+                    }, 50);
                 });
 
                 cableElement.addEventListener('mouseleave', function() {
@@ -464,20 +1219,11 @@
                 });
             }
 
-            setupConnectionLine(boardToBoardCables[0], connectionLine1); // Setup for first cable
-            setupConnectionLine(boardToBoardCables[1], connectionLine2); // Setup for second cable
-
-            // --- End Connection Line Logic ---
-
-            // Add transition class after initial render
-             setTimeout(() => {
-                 const allCells = document.querySelectorAll('.circuit-table td');
-                 allCells.forEach(c => {
-                    c.style.transition = 'all var(--transition-speed) ease';
-                 });
-                 if(connectionLine1) connectionLine1.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-                 if(connectionLine2) connectionLine2.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-            }, 50);
+            // Set up connection lines for cables
+            if (boardToBoardCables.length >= 2) {
+                setupConnectionLine(boardToBoardCables[0], connectionLine1, 0);
+                setupConnectionLine(boardToBoardCables[1], connectionLine2, 1);
+            }
         });
     </script>
 </body>
