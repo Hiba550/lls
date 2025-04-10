@@ -54,6 +54,9 @@ class User(AbstractUser):
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(auto_now=True)
+    is_logged_in = models.BooleanField(default=False)
+    last_activity = models.DateTimeField(null=True, blank=True)
+    session_id = models.CharField(max_length=100, null=True, blank=True)
     
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

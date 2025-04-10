@@ -47,14 +47,14 @@ const Assembly = () => {
       if (order.item_code.includes('YBS') || order.item_code.includes('5YB')) {
         return 'YBS';
       }
-      if (order.item_code.includes('RSM')) {
+      if (order.item_code.includes('RSM') || order.item_code.includes('5RS')) {
         return 'RSM';
       }
     }
     
     // Check product name for indicators
     if (order.product) {
-      if (order.product.includes('YBS') || order.product.includes('YBS')) {
+      if (order.product.includes('YBS')) {
         return 'YBS';
       }
       if (order.product.includes('RSM')) {

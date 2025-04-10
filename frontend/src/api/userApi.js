@@ -10,16 +10,149 @@ const userApi = {
    * @returns {Promise} Authentication tokens and user data
    */
   async login(credentials) {
-    return apiClient.post('/api/auth/login/', credentials);
+    try {
+      console.log('Login attempt with data:', credentials);
+      try {
+        // First check if this account already has an active session
+        await apiClient.post('/api/auth/check-session/', { email: credentials.email });
+        
+        // If we get here, the user doesn't have an active session (received 200 OK)
+        // Proceed with login
+        const response = await apiClient.post('/api/auth/login/', credentials);
+        
+        // Check for empty response
+        if (!response) {
+          console.error('Empty login response from server');
+          throw new Error('Login failed: Empty response from server');
+        }
+        
+        console.log('Login response received, data:', response.data);
+        
+        // Process login response - IMPORTANT: Check the full response structure
+        if (!response.data || !response.data.access) {
+          console.error('Invalid login response format:', response);
+          throw new Error('Login failed: Invalid response format (missing tokens)');
+        }
+        
+        // Return the data portion of the response
+        return response.data;
+      } catch (error) {
+        // If error is 409 Conflict, a session already exists
+        if (error.response?.status === 409) {
+          // Show conflict error with options to force login
+          const conflictError = new Error('This account is already logged in on another device. Please logout from the other session first.');
+          conflictError.isSessionConflict = true;
+          throw conflictError;
+        }
+        
+        // Log and rethrow any other error
+        if (error.response?.status === 401) {
+          console.error('Authentication failed: Invalid credentials');
+        } else {
+          console.error('Login error:', error);
+        }
+        
+        throw error;
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Force logout a user by email address
+   * Used before force login to terminate existing sessions
+   * @param {string} email - User email address
+   * @returns {Promise} Success message
+   */
+  async forceLogoutEmail(email) {
+    try {
+      const response = await apiClient.post('/api/auth/force-logout-email/', { email });
+      return response.data;
+    } catch (error) {
+      console.error('Force logout error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Force login by terminating existing sessions
+   * @param {Object} credentials - Login credentials (email, password)
+   * @returns {Promise} Authentication tokens and user data
+   */
+  async forceLogin(credentials) {
+    try {
+      // First terminate any existing sessions for this user
+      await this.forceLogoutEmail(credentials.email);
+      
+      // Then proceed with regular login
+      const response = await apiClient.post('/api/auth/login/', credentials);
+      
+      if (!response || !response.data) {
+        console.error('Empty force login response from server');
+        throw new Error('Login failed: Empty response from server');
+      }
+      
+      // Process login response
+      if (!response.data.access) {
+        throw new Error('Login failed: Invalid response format (missing tokens)');
+      }
+      
+      // Store user data if available
+      if (response.data && response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem('sessionActive', 'true');
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error("Force login error:", error);
+      throw error;
+    }
   },
 
   /**
    * Logout user (invalidate refresh token)
-   * @param {string} refreshToken - The refresh token to invalidate
    * @returns {Promise} Success message
    */
-  async logout(refreshToken) {
-    return apiClient.post('/api/auth/logout/', { refresh: refreshToken });
+  async logout() {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      const result = await apiClient.post('/api/auth/logout/', { refresh: refreshToken });
+      
+      // Clear stored tokens
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sessionActive');
+      
+      return result;
+    } catch (error) {
+      // Clear tokens even if API call fails
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sessionActive');
+      throw error;
+    }
+  },
+
+  /**
+   * Force logout a specific user by ID (admin only)
+   * @param {number} userId - User ID to force logout
+   * @returns {Promise} Success message
+   */
+  async forceLogout(userId) {
+    return apiClient.post(`/api/users/${userId}/force-logout/`);
+  },
+
+  /**
+   * Get all active sessions (admin only)
+   * @returns {Promise} List of active user sessions
+   */
+  async getActiveSessions() {
+    return apiClient.get('/api/sessions/');
   },
 
   /**
@@ -98,7 +231,13 @@ const userApi = {
    * @returns {Promise} List of users
    */
   async getAllUsers() {
-    return apiClient.get('/api/users/');
+    try {
+      const response = await apiClient.get('/api/users/');
+      return response.data || []; // Ensure we always return an array
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      throw error;
+    }
   },
 
   /**
@@ -167,6 +306,7 @@ export async function handleLogout() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('sessionActive');
     
     // Force redirect to login
     console.log('Redirecting to login page...');

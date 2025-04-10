@@ -588,7 +588,7 @@
             <h1 class="title">RAP - ILI DUCT ASSEMBLY</h1>
         </div>
 
-        <div class="board-to-board-title">Board to Board</div>
+        <div class="board-to-board-title" id="currentComponentTitle">Ready to Start Scanning</div>
 
         <div class="circuit-lines"></div>
         <div class="glow"></div>
@@ -784,8 +784,11 @@
                 progressPercentage.textContent = `${progressPercent}%`;
             }
 
-            // Function to highlight the next component to scan
+            // Update the highlightNextComponent function:
             function highlightNextComponent() {
+                // Get the title element
+                const titleElement = document.getElementById('currentComponentTitle');
+                
                 // Clear existing highlights
                 Object.values(components).forEach(comp => {
                     if (comp.element) comp.element.classList.remove('next');
@@ -797,9 +800,19 @@
                     .find(comp => !comp.scanned);
 
                 if (nextComponent && nextComponent.element) {
+                    // Highlight the component
                     nextComponent.element.classList.add('next');
+                    
+                    // Update the title to show what needs to be scanned
+                    titleElement.textContent = `Scan Now: ${nextComponent.name}`;
+                    titleElement.style.color = '#f97316'; // Orange color for active scanning
+                    
                     addLogEntry(`Next scan: ${nextComponent.name}`, 'info');
                 } else {
+                    // All components scanned
+                    titleElement.textContent = 'Assembly Complete';
+                    titleElement.style.color = '#16a34a'; // Green for completion
+                    
                     completeButton.classList.remove('hidden');
                     completeButton.disabled = false;
                     addLogEntry('All components scanned successfully! Click Complete to finish.', 'success');

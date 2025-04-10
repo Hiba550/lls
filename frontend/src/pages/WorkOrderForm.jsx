@@ -18,33 +18,34 @@ const WorkOrderForm = () => {
   // Machine options based on PCB type
   const machineOptions = {
     YBS: [
-      { id: 'ybs-m1', name: 'YBS Machine 1' },
-      { id: 'ybs-m2', name: 'YBS Machine 2' },
-      { id: 'ybs-m3', name: 'YBS Machine 3' }
+      { id: 'ybs-m1', name: 'YBS Worker 1' },
+      { id: 'ybs-m2', name: 'YBS Worker 2' },
+      { id: 'ybs-m3', name: 'YBS Worker 3' }
     ],
     RSM: [
-      { id: 'rsm-m1', name: 'RSM Machine 1' },
-      { id: 'rsm-m2', name: 'RSM Machine 2' },
-      { id: 'rsm-m3', name: 'RSM Machine 3' }
+      { id: 'rsm-m1', name: 'RSM Worker 1' },
+      { id: 'rsm-m2', name: 'RSM Worker 2' },
+      { id: 'rsm-m3', name: 'RSM Worker 3' }
     ]
   };
   
   const [formData, setFormData] = useState({
     product: '',
     item_code: '',
-    pcb_type: '',  // This will now hold the PCB type ID, not the code
-    pcb_type_code: '', // New field to store the code (YBS, RSM) for UI display
+    pcb_type: '',  
+    pcb_type_code: '',
     pcb_item_code: '',
     quantity: 1,
+    from_date: new Date().toISOString().split('T')[0], // Add from_date with today as default
     target_date: new Date().toISOString().split('T')[0],
     customer_name: '',
     machine_id: '',
-    machine_no: '', // Added to match backend field
+    machine_no: '',
     machine_type: '',
-    description: '', // Added required field from backend
-    released_by: 'System', // Added required field from backend with default value
-    remarks: '', // Changed notes to remarks to match backend field
-    status: 'Pending' // Changed to match backend choices (capital P)
+    description: '',
+    released_by: 'System',
+    remarks: '',
+    status: 'Pending'
   });
 
   // Load item master data, PCB types and PCB items
@@ -100,6 +101,11 @@ const WorkOrderForm = () => {
             // Format date for input field
             if (data.target_date) {
               data.target_date = new Date(data.target_date).toISOString().split('T')[0];
+            }
+            if (data.from_date) {
+              data.from_date = new Date(data.from_date).toISOString().split('T')[0];
+            } else {
+              data.from_date = new Date().toISOString().split('T')[0];
             }
             
             // If we have pcb_type_code from the response, set it
@@ -219,6 +225,7 @@ const WorkOrderForm = () => {
         item_code: formData.item_code,
         description: formData.description,
         quantity: formData.quantity,
+        from_date: formData.from_date, // Add this line
         target_date: formData.target_date,
         customer_name: formData.customer_name,
         machine_no: formData.machine_no,
@@ -414,6 +421,19 @@ const WorkOrderForm = () => {
               />
             </div>
             
+            {/* From Date */}
+            <div className="col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">From Date *</label>
+              <input
+                type="date"
+                name="from_date"
+                value={formData.from_date}
+                onChange={handleChange}
+                required
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
             {/* Target Date */}
             <div className="col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Target Date *</label>
@@ -442,7 +462,7 @@ const WorkOrderForm = () => {
             
             {/* Machine Selection */}
             <div className="col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Machine</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Worker</label>
               <select
                 name="machine_id"
                 value={formData.machine_id}
@@ -450,7 +470,7 @@ const WorkOrderForm = () => {
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 disabled={!formData.pcb_type_code}
               >
-                <option value="">-- Select Machine --</option>
+                <option value="">-- Select Worker --</option>
                 {availableMachines.map((machine) => (
                   <option key={machine.id} value={machine.id}>
                     {machine.name}
@@ -459,7 +479,7 @@ const WorkOrderForm = () => {
               </select>
               {!formData.pcb_type_code && (
                 <p className="mt-1 text-sm text-gray-500">
-                  Select a PCB type first to see available machines
+                  Select a PCB type first to see available Workers
                 </p>
               )}
             </div>

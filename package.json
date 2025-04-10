@@ -6,7 +6,8 @@
     "@tailwindcss/typography": "^0.5.16"
   },
   "dependencies": {
-    "framer-motion": "^12.6.0",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^12.6.3",
     "react-router-dom": "^7.4.0",
     "react-toastify": "^11.0.5"
   }

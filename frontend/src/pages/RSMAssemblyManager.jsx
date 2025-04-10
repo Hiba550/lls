@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
-import { fetchWorkOrders } from '../api/workOrderApi';
+import { fetchWorkOrders, updateWorkOrder } from '../api/workOrderApi';
 import { fetchAssemblyProcesses } from '../api/assemblyApi';
 import { fetchPCBItems } from '../api/itemMasterApi';
 
@@ -192,17 +192,58 @@ const RSMAssemblyManager = () => {
       setCreating(true);
       toast.info('Preparing assembly process...');
       
-      // Get PCB item code from work order or selected value
-      const pcbItemCode = workOrder.pcb_item_code || selectedPcbItemCode;
+      // Automatically assign RSM PCB type if not already assigned
+      let pcbItemCode = workOrder.pcb_item_code || selectedPcbItemCode;
+      
+      // Auto-assign PCB type based on RSM type
+      if (!pcbItemCode) {
+        // Check if we can determine the RSM type from the item_code
+        if (workOrder.item_code && workOrder.item_code.includes('5RS')) {
+          // Extract the RSM code from the item code (e.g., '5RS011075' -> 'RSM011075')
+          const rsmCode = workOrder.item_code.replace(/^5RS/, 'RSM');
+          
+          // Check if this RSM code exists in our pcbItems
+          const matchingItem = pcbItems.find(item => item.item_code === rsmCode);
+          
+          if (matchingItem) {
+            pcbItemCode = matchingItem.item_code;
+            console.log('Auto-assigned PCB type based on item code:', pcbItemCode);
+          } else {
+            // Default to the first available RSM PCB item if no match found
+            pcbItemCode = pcbItems.length > 0 ? pcbItems[0].item_code : null;
+            console.log('Auto-assigned default PCB type:', pcbItemCode);
+          }
+        } else {
+          // Default to the first available RSM PCB item
+          pcbItemCode = pcbItems.length > 0 ? pcbItems[0].item_code : null;
+          console.log('Auto-assigned default PCB type:', pcbItemCode);
+        }
+      }
       
       // Validate PCB item code
       if (!pcbItemCode) {
-        toast.error('Please select a PCB item to continue');
+        toast.error('Could not automatically assign PCB item. Please select one manually.');
         setCreating(false);
         return;
       }
       
       console.log('Creating assembly for work order:', workOrder, 'PCB item code:', pcbItemCode);
+      
+      // UPDATE THE WORK ORDER IN THE DATABASE - Add this code
+      try {
+        await updateWorkOrder(workOrder.id, {
+          pcb_type: 'RSM',
+          pcb_item_code: pcbItemCode
+        });
+        console.log('Work order updated with PCB type');
+        
+        // Update the local work order copy for immediate UI update
+        workOrder.pcb_type = 'RSM';
+        workOrder.pcb_item_code = pcbItemCode;
+      } catch (updateError) {
+        console.error('Failed to update work order:', updateError);
+        // Continue anyway, as we've set the localStorage values
+      }
       
       // Save to localStorage for persistence
       localStorage.setItem('currentRSMWorkOrderId', workOrder.id);

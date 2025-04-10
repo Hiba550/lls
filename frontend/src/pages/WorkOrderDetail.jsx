@@ -14,14 +14,14 @@ const WorkOrderDetail = () => {
   // Machine options based on PCB type (YBS and RSM)
   const machineOptions = {
     YBS: [
-      { id: 'ybs-m1', name: 'YBS Machine 1' },
-      { id: 'ybs-m2', name: 'YBS Machine 2' },
-      { id: 'ybs-m3', name: 'YBS Machine 3' }
+      { id: 'ybs-m1', name: 'YBS Worker 1' },
+      { id: 'ybs-m2', name: 'YBS Worker 2' },
+      { id: 'ybs-m3', name: 'YBS Worker 3' }
     ],
     RSM: [
-      { id: 'rsm-m1', name: 'RSM Machine 1' },
-      { id: 'rsm-m2', name: 'RSM Machine 2' },
-      { id: 'rsm-m3', name: 'RSM Machine 3' }
+      { id: 'rsm-m1', name: 'RSM Worker 1' },
+      { id: 'rsm-m2', name: 'RSM Worker 2' },
+      { id: 'rsm-m3', name: 'RSM Worker 3' }
     ]
   };
 
