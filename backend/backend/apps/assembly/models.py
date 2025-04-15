@@ -1,6 +1,7 @@
 from django.db import models
 from ..work_order.models import WorkOrder
 from ..item_master.models import ItemMaster
+import json
 
 class AssemblyProcess(models.Model):
     STATUS_CHOICES = [
@@ -60,3 +61,58 @@ class ScannedPart(models.Model):
     
     def __str__(self):
         return f"{self.part_code} for {self.assembly_process.serial_number}"
+
+class CompletedAssembly(models.Model):
+    work_order = models.CharField(max_length=100)
+    product = models.CharField(max_length=255)
+    item_code = models.CharField(max_length=100)
+    serial_number = models.CharField(max_length=100, blank=True, null=True)
+    barcode_number = models.CharField(max_length=100, blank=True, null=True)
+    completed_at = models.DateTimeField()
+    is_rework = models.BooleanField(default=False)
+    reworked = models.BooleanField(default=False)
+    original_assembly_id = models.CharField(max_length=100, blank=True, null=True)
+    zone = models.CharField(max_length=100, blank=True, null=True)
+    reworked_by = models.CharField(max_length=100, blank=True, null=True)
+    rework_notes = models.TextField(blank=True, null=True)
+    
+    # Store complex data as JSON strings
+    _scanned_components = models.TextField(blank=True, null=True)
+    _reworked_components = models.TextField(blank=True, null=True)
+    _previous_components = models.TextField(blank=True, null=True)
+    
+    @property
+    def scanned_components(self):
+        if self._scanned_components:
+            return json.loads(self._scanned_components)
+        return []
+        
+    @scanned_components.setter
+    def scanned_components(self, value):
+        if value:
+            self._scanned_components = json.dumps(value)
+            
+    @property
+    def reworked_components(self):
+        if self._reworked_components:
+            return json.loads(self._reworked_components)
+        return []
+        
+    @reworked_components.setter
+    def reworked_components(self, value):
+        if value:
+            self._reworked_components = json.dumps(value)
+            
+    @property
+    def previous_components(self):
+        if self._previous_components:
+            return json.loads(self._previous_components)
+        return []
+        
+    @previous_components.setter
+    def previous_components(self, value):
+        if value:
+            self._previous_components = json.dumps(value)
+    
+    class Meta:
+        ordering = ['-completed_at']

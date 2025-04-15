@@ -5,8 +5,6 @@ import Layout from './components/Layout';
 import NotFound from './components/NotFound';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
-import AdminRoute from './components/common/AdminRoute';
-import Unauthorized from './pages/Unauthorized';
 
 // Main pages
 import Assembly from './pages/Assembly';
@@ -16,8 +14,7 @@ import Settings from './pages/Settings';
 import WorkOrders from './pages/WorkOrders';
 import WorkOrderForm from './pages/WorkOrderForm';
 import WorkOrderManagement from './pages/WorkOrderManagement';
-import UserProfile from './pages/UserProfile';
-import UserManagement from './pages/UserManagement';
+import UserProfile from './pages/UserProfile'; // Add this import
 
 // Assembly pages
 import YBSAssemblyManager from './pages/YBSAssemblyManager';
@@ -88,7 +85,6 @@ export default function AppRoutes() {
     <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
-      <Route path="/unauthorized" element={<Unauthorized />} />
 
       {/* Protected routes - require authentication */}
       <Route element={<ProtectedRoute />}>
@@ -133,13 +129,6 @@ export default function AppRoutes() {
             <Route path="quality" element={<Reports type="quality" />} />
             <Route path="efficiency" element={<Reports type="efficiency" />} />
           </Route>
-          
-          {/* User Management - Admin only */}
-          <Route path="user-management" element={
-            <AdminRoute>
-              <UserManagement />
-            </AdminRoute>
-          } />
           
           {/* Settings */}
           <Route path="settings" element={<Settings />} />

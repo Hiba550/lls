@@ -3,7 +3,6 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import userApi from '../api/userApi';
 import { toast } from 'react-toastify';
-import { Link } from 'react-router-dom';
 
 const Settings = () => {
   const { darkMode, toggleDarkMode } = useTheme();
@@ -39,15 +38,27 @@ const Settings = () => {
     showCompletedWorkOrders: true
   });
 
+  // User management state (for admin)
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    email: '',
+    full_name: '',
+    password: '',
+    password_confirm: '',
+    department: '',
+    user_type: 'operator',
+    phone_number: '',
+    is_active: true
+  });
+
   // Password change state
   const [passwordData, setPasswordData] = useState({
     old_password: '',
     new_password: '',
     confirm_password: ''
   });
-
-  // User management state (for admin)
-  const [users, setUsers] = useState([]);
 
   // Fetch user data on component mount
   useEffect(() => {
@@ -59,17 +70,14 @@ const Settings = () => {
           userApi.getPreferences()
         ]);
         
-        // Set profile data if available
-        if (profileData) {
-          setUserProfile({
-            full_name: profileData.full_name || '',
-            email: profileData.email || '',
-            user_type: profileData.user_type || '',
-            avatar: profileData.avatar || '',
-            department: profileData.department || '',
-            phone_number: profileData.phone_number || ''
-          });
-        }
+        setUserProfile({
+          full_name: profileData.full_name || '',
+          email: profileData.email || '',
+          user_type: profileData.user_type || '',
+          avatar: profileData.avatar || '',
+          department: profileData.department || '',
+          phone_number: profileData.phone_number || ''
+        });
         
         if (preferencesData) {
           // Set notifications if available
@@ -82,6 +90,12 @@ const Settings = () => {
             setPreferences(preferencesData.app_preferences);
           }
         }
+
+        // If user is admin, fetch all users
+        if (isAdmin) {
+          const usersData = await userApi.getAllUsers();
+          setUsers(usersData);
+        }
       } catch (error) {
         toast.error('Failed to load settings. Please try again later.');
         console.error('Error loading settings:', error);
@@ -91,7 +105,7 @@ const Settings = () => {
     };
     
     fetchUserData();
-  }, []);
+  }, [isAdmin]);
   
   // Handle notification toggle
   const handleNotificationChange = (setting) => {
@@ -241,6 +255,146 @@ const Settings = () => {
       toast.error(errorMessage);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // User management handlers (for admin)
+  const handleUserFormChange = (field, value) => {
+    setUserFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (userFormData.password !== userFormData.password_confirm) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      const newUser = await userApi.createUser(userFormData);
+      
+      // Add to users list
+      setUsers(prev => [...prev, newUser]);
+      
+      // Close modal and reset form
+      setShowUserModal(false);
+      setUserFormData({
+        email: '',
+        full_name: '',
+        password: '',
+        password_confirm: '',
+        department: '',
+        user_type: 'operator',
+        phone_number: '',
+        is_active: true
+      });
+      
+      toast.success('User created successfully');
+    } catch (error) {
+      const errorMessage = error.response?.data?.email?.[0] || 
+                          error.response?.data?.password?.[0] ||
+                          'Failed to create user. Please try again.';
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditUser = (user) => {
+    setSelectedUser(user);
+    setUserFormData({
+      email: user.email,
+      full_name: user.full_name || '',
+      password: '',
+      password_confirm: '',
+      department: user.department || '',
+      user_type: user.user_type || 'operator',
+      phone_number: user.phone_number || '',
+      is_active: user.is_active
+    });
+    
+    setShowUserModal(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    
+    // Validate form if password is being updated
+    if (userFormData.password && userFormData.password !== userFormData.password_confirm) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      
+      // Create update data without password fields if they're empty
+      const updateData = {...userFormData};
+      if (!updateData.password) {
+        delete updateData.password;
+        delete updateData.password_confirm;
+      }
+      
+      const updatedUser = await userApi.updateUser(selectedUser.id, updateData);
+      
+      // Update users list
+      setUsers(prev => prev.map(user => 
+        user.id === updatedUser.id ? updatedUser : user
+      ));
+      
+      // Close modal and reset
+      setShowUserModal(false);
+      setSelectedUser(null);
+      
+      toast.success('User updated successfully');
+    } catch (error) {
+      toast.error('Failed to update user. Please try again.');
+      console.error('Error updating user:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await userApi.deleteUser(userId);
+      
+      // Remove from users list
+      setUsers(prev => prev.filter(user => user.id !== userId));
+      
+      toast.success('User deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete user. Please try again.');
+      console.error('Error deleting user:', error);
+    }
+  };
+
+  // Toggle user active status
+  const toggleUserStatus = async (user) => {
+    try {
+      const updatedUser = await userApi.updateUser(user.id, {
+        is_active: !user.is_active
+      });
+      
+      // Update users list
+      setUsers(prev => prev.map(u => 
+        u.id === updatedUser.id ? updatedUser : u
+      ));
+      
+      toast.success(`User ${updatedUser.is_active ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      toast.error('Failed to update user status. Please try again.');
+      console.error('Error updating user status:', error);
     }
   };
 
@@ -608,34 +762,241 @@ const Settings = () => {
         <section className="mb-10">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-medium">User Management</h3>
-            <Link 
-              to="/user-management"
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+            <button
+              onClick={() => {
+                setSelectedUser(null);
+                setUserFormData({
+                  email: '',
+                  full_name: '',
+                  password: '',
+                  password_confirm: '',
+                  department: '',
+                  user_type: 'operator',
+                  phone_number: '',
+                  is_active: true
+                });
+                setShowUserModal(true);
+              }}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium"
             >
-              Manage Users
-            </Link>
+              Add New User
+            </button>
           </div>
           
           <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              As an administrator, you can manage users, including creating, editing, and deactivating user accounts.
-            </p>
-            <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-100 dark:border-blue-800 flex-1">
-                <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">User Access Control</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Manage user permissions, roles, and access levels across the application.
-                </p>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-md border border-green-100 dark:border-green-800 flex-1">
-                <h4 className="font-medium text-green-800 dark:text-green-300 mb-2">Session Management</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Monitor active user sessions and force logout when necessary.
-                </p>
-              </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Email</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Department</th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {users.map(user => (
+                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                        {user.full_name || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                        {user.email}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                        {user.user_type_display || user.user_type}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                        }`}>
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                        {user.department || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button 
+                          onClick={() => handleEditUser(user)}
+                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => toggleUserStatus(user)}
+                          className={`${
+                            user.is_active ? 'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300' : 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300'
+                          } mr-4`}
+                        >
+                          {user.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            
+            {users.length === 0 && (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                No users found. Click "Add New User" to create one.
+              </div>
+            )}
           </div>
         </section>
+      )}
+
+      {/* User Create/Edit Modal */}
+      {showUserModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-50 flex items-center justify-center">
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6 shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">
+                {selectedUser ? 'Edit User' : 'Create New User'}
+              </h3>
+              <button 
+                onClick={() => setShowUserModal(false)}
+                className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <form onSubmit={selectedUser ? handleUpdateUser : handleCreateUser}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_email">Email</label>
+                <input 
+                  type="email" 
+                  id="user_email"
+                  value={userFormData.email}
+                  onChange={(e) => handleUserFormChange('email', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  required
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_full_name">Full Name</label>
+                <input 
+                  type="text" 
+                  id="user_full_name"
+                  value={userFormData.full_name}
+                  onChange={(e) => handleUserFormChange('full_name', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_password">
+                  {selectedUser ? 'Password (leave blank to keep unchanged)' : 'Password'}
+                </label>
+                <input 
+                  type="password" 
+                  id="user_password"
+                  value={userFormData.password}
+                  onChange={(e) => handleUserFormChange('password', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  required={!selectedUser}
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_password_confirm">
+                  Confirm Password
+                </label>
+                <input 
+                  type="password" 
+                  id="user_password_confirm"
+                  value={userFormData.password_confirm}
+                  onChange={(e) => handleUserFormChange('password_confirm', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  required={!selectedUser}
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_department">Department</label>
+                <input 
+                  type="text" 
+                  id="user_department"
+                  value={userFormData.department}
+                  onChange={(e) => handleUserFormChange('department', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_phone">Phone Number</label>
+                <input 
+                  type="text" 
+                  id="user_phone"
+                  value={userFormData.phone_number}
+                  onChange={(e) => handleUserFormChange('phone_number', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1" htmlFor="user_type">Role</label>
+                <select 
+                  id="user_type"
+                  value={userFormData.user_type}
+                  onChange={(e) => handleUserFormChange('user_type', e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  required
+                >
+                  <option value="admin">Admin</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="operator">Operator</option>
+                  <option value="qc">Quality Control</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              
+              <div className="mb-6 flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="user_active"
+                  checked={userFormData.is_active}
+                  onChange={(e) => handleUserFormChange('is_active', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="user_active" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  Active Account
+                </label>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowUserModal(false)}
+                  className="bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : selectedUser ? 'Update User' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

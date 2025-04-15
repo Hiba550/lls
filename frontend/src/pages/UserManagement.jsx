@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import userApi from '../api/userApi';
-import { useNotificationContext } from '../context/NotificationContext';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userFormData, setUserFormData] = useState({
     email: '',
     full_name: '',
@@ -29,48 +25,28 @@ const UserManagement = () => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [activeSessions, setActiveSessions] = useState([]);
   
-  const { hasRole, currentUser } = useAuth();
-  const { addNotification } = useNotificationContext();
+  const { hasRole } = useAuth();
   const isAdmin = hasRole('admin');
   
   const itemsPerPage = 10;
 
-  // Fetch users and active sessions
   useEffect(() => {
     if (isAdmin) {
       fetchUsers();
-      fetchActiveSessions();
-      
-      // Poll active sessions every 30 seconds to keep data fresh
-      const sessionInterval = setInterval(() => {
-        fetchActiveSessions();
-      }, 30000);
-      
-      return () => clearInterval(sessionInterval);
     }
   }, [isAdmin]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await userApi.getAllUsers();
-      setUsers(response.data || []);
+      const usersData = await userApi.getAllUsers();
+      setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Failed to load users');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchActiveSessions = async () => {
-    try {
-      const response = await userApi.getActiveSessions();
-      setActiveSessions(response.data || []);
-    } catch (error) {
-      console.error('Error fetching active sessions:', error);
     }
   };
 
@@ -99,8 +75,8 @@ const UserManagement = () => {
     }
 
     try {
-      const response = await userApi.createUser(userFormData);
-      setUsers(prev => [...prev, response.data]);
+      const newUser = await userApi.createUser(userFormData);
+      setUsers(prev => [...prev, newUser]);
       setShowUserModal(false);
       
       setUserFormData({
@@ -115,11 +91,6 @@ const UserManagement = () => {
       });
       
       toast.success('User created successfully');
-      addNotification({
-        title: 'New User Created',
-        message: `${response.data.full_name} has been added as a ${response.data.user_type}`,
-        type: 'success'
-      });
     } catch (error) {
       console.error('Error creating user:', error);
       toast.error('Failed to create user: ' + 
@@ -159,51 +130,35 @@ const UserManagement = () => {
       }
       delete updateData.password_confirm;
       
-      const response = await userApi.updateUser(selectedUser.id, updateData);
+      const updatedUser = await userApi.updateUser(selectedUser.id, updateData);
       
       // Update users list
       setUsers(prev => prev.map(user => 
-        user.id === selectedUser.id ? response.data : user
+        user.id === updatedUser.id ? updatedUser : user
       ));
       
       setShowUserModal(false);
       setSelectedUser(null);
       
       toast.success('User updated successfully');
-      addNotification({
-        title: 'User Updated',
-        message: `${response.data.full_name}'s account has been updated`,
-        type: 'info'
-      });
     } catch (error) {
       console.error('Error updating user:', error);
       toast.error('Failed to update user. Please try again.');
     }
   };
 
-  const promptDeleteUser = (user) => {
-    setDeleteConfirmUser(user);
-    setShowDeleteConfirm(true);
-  };
-
-  const handleDeleteUser = async () => {
-    if (!deleteConfirmUser) return;
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
     
     try {
-      await userApi.deleteUser(deleteConfirmUser.id);
+      await userApi.deleteUser(userId);
       
       // Remove from users list
-      setUsers(prev => prev.filter(user => user.id !== deleteConfirmUser.id));
+      setUsers(prev => prev.filter(user => user.id !== userId));
       
       toast.success('User deleted successfully');
-      addNotification({
-        title: 'User Deleted',
-        message: `${deleteConfirmUser.full_name}'s account has been removed`,
-        type: 'warning'
-      });
-      
-      setShowDeleteConfirm(false);
-      setDeleteConfirmUser(null);
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error('Failed to delete user. Please try again.');
@@ -212,23 +167,16 @@ const UserManagement = () => {
 
   const toggleUserStatus = async (user) => {
     try {
-      const response = await userApi.updateUser(user.id, {
+      const updatedUser = await userApi.updateUser(user.id, {
         is_active: !user.is_active
       });
       
       // Update users list
       setUsers(prev => prev.map(u => 
-        u.id === response.data.id ? response.data : u
+        u.id === updatedUser.id ? updatedUser : u
       ));
       
-      const actionType = response.data.is_active ? 'activated' : 'deactivated';
-      toast.success(`User ${actionType} successfully`);
-      
-      addNotification({
-        title: `User ${actionType}`,
-        message: `${response.data.full_name}'s account has been ${actionType}`,
-        type: response.data.is_active ? 'success' : 'warning'
-      });
+      toast.success(`User ${updatedUser.is_active ? 'activated' : 'deactivated'} successfully`);
     } catch (error) {
       console.error('Error updating user status:', error);
       toast.error('Failed to update user status. Please try again.');
@@ -239,32 +187,16 @@ const UserManagement = () => {
     try {
       await userApi.forceLogout(userId);
       
-      const loggedOutUser = users.find(user => user.id === userId);
-      
-      // Update active sessions
-      fetchActiveSessions();
+      // Update user in the list to show logged out
+      setUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, is_logged_in: false, last_activity: new Date().toISOString() } : user
+      ));
       
       toast.success('User was logged out successfully');
-      addNotification({
-        title: 'Force Logout',
-        message: `${loggedOutUser?.full_name || 'User'} has been logged out by admin`,
-        type: 'info'
-      });
     } catch (error) {
       console.error('Error forcing logout:', error);
       toast.error('Failed to log out user. Please try again.');
     }
-  };
-
-  // Check if user is currently logged in
-  const isUserOnline = (userId) => {
-    return activeSessions.some(session => session.id === userId);
-  };
-
-  // Get user last activity time
-  const getUserLastActivity = (userId) => {
-    const session = activeSessions.find(session => session.id === userId);
-    return session?.last_activity || null;
   };
 
   // Apply filtering, sorting and pagination
@@ -275,12 +207,10 @@ const UserManagement = () => {
       user.department?.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesRole = filterRole === 'all' || user.user_type === filterRole;
-    
-    const isOnline = isUserOnline(user.id);
     const matchesStatus = filterStatus === 'all' || 
       (filterStatus === 'active' && user.is_active) || 
       (filterStatus === 'inactive' && !user.is_active) ||
-      (filterStatus === 'online' && isOnline);
+      (filterStatus === 'online' && user.is_logged_in);
       
     return matchesSearch && matchesRole && matchesStatus;
   });
@@ -288,12 +218,6 @@ const UserManagement = () => {
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     let valueA = a[sortField];
     let valueB = b[sortField];
-    
-    // Special case for online status
-    if (sortField === 'is_online') {
-      valueA = isUserOnline(a.id);
-      valueB = isUserOnline(b.id);
-    }
     
     if (typeof valueA === 'string') valueA = valueA.toLowerCase();
     if (typeof valueB === 'string') valueB = valueB.toLowerCase();
@@ -327,27 +251,6 @@ const UserManagement = () => {
     }).format(date);
   };
 
-  // Calculate time elapsed since last activity
-  const getTimeElapsed = (dateString) => {
-    if (!dateString) return 'N/A';
-    
-    const now = new Date();
-    const lastActivity = new Date(dateString);
-    const diffMs = now - lastActivity;
-    
-    const diffSecs = Math.floor(diffMs / 1000);
-    if (diffSecs < 60) return `${diffSecs} seconds ago`;
-    
-    const diffMins = Math.floor(diffSecs / 60);
-    if (diffMins < 60) return `${diffMins} minutes ago`;
-    
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} days ago`;
-  };
-
   if (!isAdmin) {
     return (
       <div className="p-6 bg-white rounded-lg shadow-md">
@@ -359,8 +262,6 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6">
-      <ToastContainer position="top-right" autoClose={3000} />
-      
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -395,12 +296,7 @@ const UserManagement = () => {
       {/* User Modal - Create or Edit */}
       {showUserModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-lg shadow-lg w-full max-w-md p-6"
-          >
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold">
                 {selectedUser ? 'Edit User' : 'Add New User'}
@@ -426,9 +322,6 @@ const UserManagement = () => {
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   disabled={selectedUser}
                 />
-                {selectedUser && (
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed after creation</p>
-                )}
               </div>
               
               <div>
@@ -475,7 +368,6 @@ const UserManagement = () => {
                   value={userFormData.department}
                   onChange={(e) => handleUserFormChange('department', e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Engineering, Production, QA"
                 />
               </div>
 
@@ -486,7 +378,6 @@ const UserManagement = () => {
                   value={userFormData.phone_number}
                   onChange={(e) => handleUserFormChange('phone_number', e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="+1 (123) 456-7890"
                 />
               </div>
 
@@ -533,49 +424,7 @@ const UserManagement = () => {
                 </button>
               </div>
             </form>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && deleteConfirmUser && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-lg shadow-lg w-full max-w-md p-6"
-          >
-            <div className="flex items-center mb-4 text-red-600">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <h3 className="text-xl font-semibold">Delete User</h3>
-            </div>
-            
-            <p className="mb-6">
-              Are you sure you want to delete <strong>{deleteConfirmUser.full_name}</strong>? 
-              This action cannot be undone.
-            </p>
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setDeleteConfirmUser(null);
-                }}
-                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteUser}
-                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
-              >
-                Delete User
-              </button>
-            </div>
-          </motion.div>
+          </div>
         </div>
       )}
 
@@ -584,20 +433,13 @@ const UserManagement = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
           
           <div>
@@ -630,10 +472,7 @@ const UserManagement = () => {
           
           <div className="flex items-end">
             <button
-              onClick={() => {
-                fetchUsers();
-                fetchActiveSessions();
-              }}
+              onClick={fetchUsers}
               className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors flex items-center justify-center"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -641,25 +480,6 @@ const UserManagement = () => {
               </svg>
               Refresh
             </button>
-          </div>
-        </div>
-        
-        {/* Session Overview */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-3">Session Overview</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-              <div className="text-2xl font-bold">{activeSessions.length}</div>
-              <div className="text-sm text-gray-600">Active Sessions</div>
-            </div>
-            <div className="bg-green-50 p-4 rounded-md border border-green-200">
-              <div className="text-2xl font-bold">{users.filter(u => u.is_active).length}</div>
-              <div className="text-sm text-gray-600">Active Accounts</div>
-            </div>
-            <div className="bg-red-50 p-4 rounded-md border border-red-200">
-              <div className="text-2xl font-bold">{users.filter(u => !u.is_active).length}</div>
-              <div className="text-sm text-gray-600">Inactive Accounts</div>
-            </div>
           </div>
         </div>
         
@@ -742,23 +562,8 @@ const UserManagement = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
-                  <th 
-                    scope="col" 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    onClick={() => handleSort('is_online')}
-                  >
-                    <div className="flex items-center">
-                      Session
-                      {sortField === 'is_online' && (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          {sortDirection === 'asc' ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                          ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          )}
-                        </svg>
-                      )}
-                    </div>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Active
                   </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -766,136 +571,100 @@ const UserManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {currentUsers.map((user) => {
-                  const isOnline = isUserOnline(user.id);
-                  const lastActivity = getUserLastActivity(user.id);
-                  const isMySelf = currentUser && currentUser.id === user.id;
-                  
-                  return (
-                    <motion.tr
-                      key={user.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            {user.avatar ? (
-                              <img className="h-10 w-10 rounded-full" src={user.avatar} alt="" />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                <span className="font-medium text-gray-500">
-                                  {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.full_name || 'N/A'}
-                              {isMySelf && (
-                                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                  You
-                                </span>
-                              )}
+                {currentUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          {user.avatar ? (
+                            <img className="h-10 w-10 rounded-full" src={user.avatar} alt="" />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                              <span className="font-medium text-gray-500">
+                                {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                              </span>
                             </div>
-                            <div className="text-sm text-gray-500">{user.department || 'No department'}</div>
-                          </div>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{user.email}</div>
-                        <div className="text-xs text-gray-500">{user.phone_number || 'No phone'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.user_type === 'admin' 
-                            ? 'bg-purple-100 text-purple-800' 
-                            : user.user_type === 'planner'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-green-100 text-green-800'
-                        }`}>
-                          {user.user_type === 'admin' 
-                            ? 'Administrator' 
-                            : user.user_type === 'planner'
-                              ? 'Planner'
-                              : 'Worker'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className={`h-2.5 w-2.5 rounded-full mr-2 ${
-                            user.is_active 
-                              ? 'bg-green-500' 
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{user.full_name || 'N/A'}</div>
+                          <div className="text-sm text-gray-500">{user.department || 'No department'}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{user.email}</div>
+                      <div className="text-xs text-gray-500">{user.phone_number || 'No phone'}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        user.user_type === 'admin' 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : user.user_type === 'planner'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-green-100 text-green-800'
+                      }`}>
+                        {user.user_type === 'admin' 
+                          ? 'Administrator' 
+                          : user.user_type === 'planner'
+                            ? 'Planner'
+                            : 'Worker'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className={`h-2.5 w-2.5 rounded-full mr-2 ${
+                          user.is_logged_in 
+                            ? 'bg-green-500' 
+                            : user.is_active
+                              ? 'bg-yellow-500'
                               : 'bg-red-500'
-                          }`}></div>
-                          <span className="text-sm text-gray-500">
-                            {user.is_active 
-                              ? 'Active' 
+                        }`}></div>
+                        <span className="text-sm text-gray-500">
+                          {user.is_logged_in 
+                            ? 'Online' 
+                            : user.is_active
+                              ? 'Active'
                               : 'Inactive'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className={`h-2.5 w-2.5 rounded-full mr-2 ${
-                            isOnline
-                              ? 'bg-green-500' 
-                              : 'bg-gray-300'
-                          }`}></div>
-                          <span className="text-sm text-gray-500">
-                            {isOnline ? (
-                              <span className="text-green-600 font-medium">Online</span>
-                            ) : lastActivity ? (
-                              <span className="text-gray-500">{getTimeElapsed(lastActivity)}</span>
-                            ) : (
-                              <span>Never</span>
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex space-x-2 justify-end">
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(user.last_activity)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex space-x-2 justify-end">
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Edit
+                        </button>
+                        {user.is_logged_in && (
                           <button
-                            onClick={() => handleEditUser(user)}
-                            className="text-blue-600 hover:text-blue-900"
-                            disabled={loading}
+                            onClick={() => forceLogout(user.id)}
+                            className="text-orange-600 hover:text-orange-900"
+                            title="Force logout this user"
                           >
-                            Edit
+                            Logout
                           </button>
-                          {isOnline && !isMySelf && (
-                            <button
-                              onClick={() => forceLogout(user.id)}
-                              className="text-orange-600 hover:text-orange-900"
-                              title="Force logout this user"
-                            >
-                              Logout
-                            </button>
-                          )}
-                          <button
-                            onClick={() => toggleUserStatus(user)}
-                            className={`${user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}`}
-                            disabled={loading || isMySelf}
-                            title={isMySelf ? "You cannot change your own status" : ""}
-                          >
-                            {user.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
-                          {!isMySelf && (
-                            <button
-                              onClick={() => promptDeleteUser(user)}
-                              className="text-red-600 hover:text-red-900"
-                              disabled={loading}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  );
-                })}
+                        )}
+                        <button
+                          onClick={() => toggleUserStatus(user)}
+                          className={`${user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}`}
+                        >
+                          {user.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

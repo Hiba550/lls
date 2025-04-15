@@ -1,11 +1,11 @@
 from django.shortcuts import render
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from django.utils import timezone
 from rest_framework.permissions import AllowAny
-from .models import AssemblyProcess, ScannedPart, AssemblyLog
-from .serializers import AssemblyProcessSerializer, ScannedPartSerializer, AssemblyLogSerializer
+from .models import AssemblyProcess, ScannedPart, AssemblyLog, CompletedAssembly
+from .serializers import AssemblyProcessSerializer, ScannedPartSerializer, AssemblyLogSerializer, CompletedAssemblySerializer
 from ..work_order.models import WorkOrder
 
 class AssemblyProcessViewSet(viewsets.ModelViewSet):
@@ -263,3 +263,133 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
                 {"error": f"Failed to update metadata: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+@api_view(['POST'])
+def create_completed_assembly(request):
+    """Create a new completed assembly record with proper component tracking"""
+    try:
+        # Extract component data from request
+        components_data = request.data.get('scanned_components', [])
+        
+        # Make a copy of the request data to modify
+        data = request.data.copy()
+        
+        # Ensure scanned_components is stored properly
+        if components_data and isinstance(components_data, list):
+            # The serializer will handle conversion to JSON
+            data['scanned_components'] = components_data
+        
+        serializer = CompletedAssemblySerializer(data=data)
+        if serializer.is_valid():
+            assembly = serializer.save()
+            
+            # Return the created assembly with all component details
+            return Response(CompletedAssemblySerializer(assembly).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_completed_assemblies(request):
+    """Get all completed assemblies"""
+    try:
+        assemblies = CompletedAssembly.objects.all()
+        serializer = CompletedAssemblySerializer(assemblies, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def create_rework_order(request):
+    """Create a new rework order from an existing completed assembly"""
+    try:
+        # Validate required fields
+        if not request.data.get('original_assembly_id'):
+            return Response({'error': 'original_assembly_id is required'}, 
+                           status=status.HTTP_400_BAD_REQUEST)
+            
+        # Get the original completed assembly
+        try:
+            original_assembly = CompletedAssembly.objects.get(id=request.data.get('original_assembly_id'))
+        except CompletedAssembly.DoesNotExist:
+            return Response({'error': 'Original assembly not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Create rework order data
+        rework_data = {
+            'product': request.data.get('product', f"{original_assembly.product} (REWORK)"),
+            'item_code': request.data.get('item_code', original_assembly.item_code),
+            'is_rework': True,
+            'reworked': False,
+            'original_assembly_id': original_assembly.id,
+            'original_barcode': original_assembly.barcode_number or original_assembly.serial_number,
+            'rework_notes': request.data.get('notes', 'Rework needed'),
+            'status': 'pending',
+            'created_by': request.data.get('created_by', 'System'),
+        }
+        
+        # Add components to rework if specified
+        if 'rework_components' in request.data and request.data['rework_components']:
+            rework_data['rework_components'] = request.data['rework_components']
+            
+        # Create the rework order
+        serializer = CompletedAssemblySerializer(data=rework_data)
+        if serializer.is_valid():
+            rework_order = serializer.save()
+            
+            # Log the rework order creation
+            try:
+                from ..work_order.models import WorkOrder
+                
+                # Create a work order entry for this rework
+                work_order = WorkOrder.objects.create(
+                    id=request.data.get('id', f"RW-{original_assembly.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"),
+                    product=rework_data['product'],
+                    item_code=rework_data['item_code'],
+                    quantity=1,
+                    status='Pending',
+                    notes=f"Rework order for {original_assembly.id}",
+                    created_at=timezone.now()
+                )
+                
+                # Link the work order to the rework order
+                rework_order.work_order_id = work_order.id
+                rework_order.save()
+            except Exception as e:
+                # Continue even if work order creation fails
+                pass
+            
+            return Response(CompletedAssemblySerializer(rework_order).data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_assembly_details(request, assembly_id):
+    """Get detailed information about an assembly including all component barcodes"""
+    try:
+        assembly = CompletedAssembly.objects.get(id=assembly_id)
+        serializer = CompletedAssemblySerializer(assembly)
+        
+        # Process the data to ensure component barcodes are included
+        data = serializer.data
+        
+        # Make sure scanned_components field is properly populated
+        if hasattr(assembly, 'scanned_components'):
+            data['scanned_components'] = assembly.scanned_components
+            
+        # Include list of component barcodes
+        component_barcodes = []
+        if data.get('scanned_components'):
+            for component in data['scanned_components']:
+                if 'barcode' in component:
+                    component_barcodes.append(component['barcode'])
+        
+        data['component_barcodes'] = component_barcodes
+        
+        return Response(data)
+    except CompletedAssembly.DoesNotExist:
+        return Response({'error': 'Assembly not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

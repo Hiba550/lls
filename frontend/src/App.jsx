@@ -1,25 +1,31 @@
 import React from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
-import { NotificationProvider } from './context/NotificationContext';
+import { AuthProvider } from './context/AuthContext';
 import AppRoutes from './routes';
-import './index.css';
+import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import './index.css'; // Import CSS for redundancy
 
 function App() {
   return (
-    <Router>
-      <ThemeProvider>
+    <ThemeProvider>
+      <BrowserRouter>
         <AuthProvider>
-          <NotificationProvider>
-            <div className="app">
-              <AppRoutes />
-            </div>
-          </NotificationProvider>
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+            <AppRoutes />
+            <ToastContainer 
+              position="top-right"
+              autoClose={3000}
+              theme="colored"
+              hideProgressBar={false}
+              closeOnClick
+              pauseOnHover
+            />
+          </div>
         </AuthProvider>
-      </ThemeProvider>
-    </Router>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

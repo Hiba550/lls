@@ -5,24 +5,11 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
-import { useAuth } from '../context/AuthContext';
 
 // Register ChartJS components
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const Dashboard = () => {
-  const { currentUser, hasRole } = useAuth();
-
-  useEffect(() => {
-    console.log('Current User:', currentUser);
-    if (currentUser) {
-      console.log('User Type:', currentUser.user_type);
-    }
-  }, [currentUser]);
-
-  console.log('Current User:', currentUser);
-  console.log('Is Admin:', hasRole('admin'));
-
   const [stats, setStats] = useState({
     totalWorkOrders: 0,
     pendingWorkOrders: 0,

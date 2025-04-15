@@ -6,11 +6,9 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate, get_user_model
 from django.shortcuts import get_object_or_404
-from django.contrib.sessions.models import Session
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.views import APIView
-from django.utils import timezone
 
 from .models import UserPreference
 from .serializers import (
@@ -200,7 +198,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
         return data
 
-# Update the login view to track sessions
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     
@@ -209,24 +206,6 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         try:
             response = super().post(request, *args, **kwargs)
             print(f"User logged in successfully: {request.data.get('email')}")
-            
-            if response.status_code == 200:
-                email = request.data.get('email')
-                user = User.objects.get(email=email)
-                
-                # Update user login status
-                user.is_logged_in = True
-                user.last_activity = timezone.now()
-                
-                # Store session ID
-                session_key = request.session.session_key
-                if not session_key:
-                    request.session.create()
-                    session_key = request.session.session_key
-                    
-                user.session_id = session_key
-                user.save()
-                
             return response
         except Exception as e:
             print(f"Login failed: {str(e)}")
@@ -316,113 +295,3 @@ def test_logout(request):
             return Response({"error": "No refresh token provided"}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# Add these new views for session management:
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
-def force_logout(request, user_id):
-    """Force logout a user (admin only)"""
-    try:
-        user = User.objects.get(id=user_id)
-        user.is_logged_in = False
-        user.session_id = None
-        user.save()
-        
-        # Delete session if it exists
-        if user.session_id:
-            Session.objects.filter(session_key=user.session_id).delete()
-            
-        return Response({"message": f"User {user.email} has been logged out."})
-    except User.DoesNotExist:
-        return Response(
-            {"error": "User not found"}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminUser])
-def active_sessions(request):
-    """Get all active sessions (admin only)"""
-    active_users = User.objects.filter(is_logged_in=True).values(
-        'id', 'email', 'full_name', 'last_activity', 'session_id'
-    )
-    return Response(active_users)
-
-@api_view(['POST'])
-@permission_classes([AllowAny])  # Allow anyone to access this endpoint
-def check_session(request):
-    """Check if user has an existing session before login"""
-    email = request.data.get('email')
-    if not email:
-        return Response(
-            {"error": "Email is required"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    try:
-        user = User.objects.get(email=email)
-        if user.is_logged_in:
-            # User is already logged in elsewhere
-            return Response(
-                {"error": "User is already logged in"}, 
-                status=status.HTTP_409_CONFLICT
-            )
-        return Response({"message": "No active session"})
-    except User.DoesNotExist:
-        # Don't reveal that the user doesn't exist for security
-        return Response({"message": "No active session"})
-    
-# Update logout view
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout_view(request):
-    """Logout the current user"""
-    user = request.user
-    user.is_logged_in = False
-    user.session_id = None
-    user.save()
-    
-    # Clear tokens
-    refresh_token = request.data.get('refresh')
-    if refresh_token:
-        try:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-        except Exception as e:
-            # Token might be invalid or already blacklisted
-            pass
-    
-    return Response({"message": "Successfully logged out"})
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])  # Allow unauthenticated requests
-def force_logout_email(request):
-    """Force logout a user by email - used for self-service session management"""
-    email = request.data.get('email')
-    
-    if not email:
-        return Response(
-            {"error": "Email is required"}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    try:
-        # Find the user by email
-        user = User.objects.get(email=email)
-        
-        # Log out the user - clear session state
-        user.is_logged_in = False
-        user.session_id = None
-        user.save()
-        
-        # Also clear any actual sessions
-        if hasattr(user, 'session_id') and user.session_id:
-            Session.objects.filter(session_key=user.session_id).delete()
-        
-        return Response({"message": "User logged out successfully"})
-    except User.DoesNotExist:
-        # For security reasons, don't reveal that the user doesn't exist
-        return Response({"message": "User logged out successfully"})

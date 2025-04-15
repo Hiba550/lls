@@ -7,11 +7,7 @@ from .views import (
     CustomTokenObtainPairView, 
     LogoutView,
     UserProfileView,
-    test_logout,
-    force_logout,
-    active_sessions,
-    check_session,
-    force_logout_email
+    test_logout
 )
 
 router = DefaultRouter()
@@ -29,9 +25,4 @@ urlpatterns = [
     path('profile/change-password/', UserViewSet.as_view({'post': 'change_password'}), name='change-password'),
     path('preferences/', UserPreferenceViewSet.as_view({'get': 'my_preferences', 'patch': 'update_preferences'}), name='my-preferences'),
     path('auth/test-logout/', test_logout, name='test-logout'),
-    path('users/<int:user_id>/force-logout/', force_logout, name='force-logout'),
-    path('sessions/', active_sessions, name='active-sessions'),
-    path('auth/check-session/', check_session, name='check-session'),
-    path('api/auth/check-session/', check_session, name='check-session'),
-    path('auth/force-logout-email/', force_logout_email, name='force-logout-email'),
 ]

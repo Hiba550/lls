@@ -657,6 +657,108 @@
             background-color: var(--status-success) !important;
             color: white !important;
         }
+
+        /* Enhanced visual feedback styles */
+        .scan-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            animation: flash-animation 0.5s ease-out;
+        }
+
+        .success-flash {
+            background-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .error-flash {
+            background-color: rgba(239, 68, 68, 0.2);
+        }
+
+        @keyframes flash-animation {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .verification-icon {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .verified {
+            background-color: rgba(16, 185, 129, 0.9);
+            color: white;
+        }
+
+        .tooltip-error {
+            position: relative;
+        }
+
+        .tooltip-error::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 0;
+            bottom: -30px;
+            background-color: #fee2e2;
+            color: #dc2626;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        .duplicate-highlight {
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.5) !important;
+            position: relative;
+            z-index: 50;
+        }
+
+        /* Pulse warning animation */
+        @keyframes pulse-warning {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        .pulse-warning {
+            animation: pulse-warning 2s infinite;
+        }
+
+        /* Print styles for completion/summary pages */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #mainContainer, #mainContainer * {
+                visibility: visible;
+            }
+
+            #mainContainer {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+
+            button {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1086,44 +1188,37 @@
     }
 
     // Function to verify a barcode against the expected verification code
-    function verifyBarcodeFormat(barcode, verificationCode) {
+    function enhancedVerifyBarcodeFormat(barcode, verificationCode) {
         if (!barcode || !verificationCode) return false;
         
-        // Position-based verification logic:
-        // - If verification code is 1 digit: Match with position 5 (index 4)
-        // - If verification code is 2 digits: Match with positions 5-6 (index 4-5)
-        // - If verification code is 3 digits: Match with positions 5-7 (index 4-6)
-        
-        console.log(`Verifying barcode: ${barcode} against code: ${verificationCode}`);
+        console.log(`Enhanced verification of barcode: ${barcode} against code: ${verificationCode}`);
         
         try {
-            // Ensure barcode is at least 7 characters long for 3-digit verification
-            if (barcode.length < Math.max(5, 4 + verificationCode.length)) {
-                console.log('Barcode too short for verification');
+            // Standardize barcode format - remove spaces and convert to uppercase
+            barcode = barcode.trim().toUpperCase();
+            
+            // Ensure barcode is at least 5 characters plus the verification code length
+            const minLength = 4 + verificationCode.length;
+            if (barcode.length < minLength) {
+                console.log(`Barcode too short: ${barcode.length} chars, need at least ${minLength}`);
                 return false;
             }
             
-            if (verificationCode.length === 1) {
-                const match = barcode[4] === verificationCode;
-                console.log(`1-digit check: Position 5 (${barcode[4]}) === ${verificationCode}: ${match}`);
-                return match;
-            } else if (verificationCode.length === 2) {
-                const slice = barcode.slice(4, 6);
-                const match = slice === verificationCode;
-                console.log(`2-digit check: Positions 5-6 (${slice}) === ${verificationCode}: ${match}`);
-                return match;
-            } else if (verificationCode.length === 3) {
-                const slice = barcode.slice(4, 7);
-                const match = slice === verificationCode;
-                console.log(`3-digit check: Positions 5-7 (${slice}) === ${verificationCode}: ${match}`);
-                return match;
+            // Get the relevant section for verification based on code length
+            const relevantSection = barcode.substring(4, 4 + verificationCode.length);
+            const match = relevantSection === verificationCode;
+            
+            console.log(`Verification check: Positions 5-${4 + verificationCode.length} (${relevantSection}) === ${verificationCode}: ${match}`);
+            
+            // Store verification details in logs for traceability
+            if (match) {
+                addLogEntry(`Verified barcode ${barcode} with code ${verificationCode} at position(s) 5${verificationCode.length > 1 ? `-${4 + verificationCode.length}` : ""}`, 'info');
             }
             
-            // If verification code is longer than 3 digits, return false
-            console.log('Verification code format not supported');
-            return false;
+            return match;
         } catch (error) {
-            console.error('Error during barcode verification:', error);
+            console.error('Error during enhanced barcode verification:', error);
+            addLogEntry(`Verification error: ${error.message}`, 'error');
             return false;
         }
     }
@@ -1144,7 +1239,8 @@
         }
         
         // Check if this barcode has already been scanned
-        if (isDuplicateBarcode(barcode)) {
+        const duplicateCheck = improvedDuplicateCheck(barcode);
+        if (duplicateCheck.isDuplicate) {
             // Add visual feedback - flash the component that was previously scanned with this barcode
             let duplicatedComponent = null;
             for (const component of Object.values(componentMapping)) {
@@ -1187,7 +1283,7 @@
         }
         
         // Verify the barcode format
-        if (verifyBarcodeFormat(barcode, nextComponent.verificationCode)) {
+        if (enhancedVerifyBarcodeFormat(barcode, nextComponent.verificationCode)) {
             // Mark component as scanned
             nextComponent.scanned = true;
             nextComponent.scannedBarcode = barcode;
@@ -1208,32 +1304,152 @@
             highlightNextComponent();
         } else {
             // Show error for incorrect barcode
-            nextComponent.element.classList.add('error');
-            setTimeout(() => {
-                nextComponent.element.classList.remove('error');
-                nextComponent.element.classList.add('next');
-            }, 1000);
-            
-            showNotification(`Invalid barcode for ${nextComponent.name}`, 'error');
-            addLogEntry(`Incorrect barcode for ${nextComponent.name}: ${barcode}`, 'error');
+            provideEnhancedVisualFeedback('error', nextComponent, barcode);
         }
     }
 
     // Function to check if a barcode has already been scanned
-    function isDuplicateBarcode(barcode) {
+    function improvedDuplicateCheck(barcode) {
         // First check the Set of scanned barcodes
         if (scannedBarcodes.has(barcode)) {
-            return true;
+            // Find where this barcode was used
+            let duplicateFound = null;
+            for (const [key, component] of Object.entries(componentMapping)) {
+                if (component.scannedBarcode === barcode) {
+                    duplicateFound = {
+                        componentName: component.name,
+                        componentKey: key,
+                        scanTime: component.verifiedAt
+                    };
+                    break;
+                }
+            }
+            
+            // Log the duplicate with details
+            if (duplicateFound) {
+                addLogEntry(`DUPLICATE BARCODE: ${barcode} was already used for ${duplicateFound.componentName} at ${duplicateFound.scanTime}`, 'error');
+            } else {
+                addLogEntry(`DUPLICATE BARCODE: ${barcode} was already scanned`, 'error');
+            }
+            
+            return {
+                isDuplicate: true,
+                duplicateInfo: duplicateFound
+            };
         }
         
         // Also check if any component was already scanned with this barcode
-        for (const component of Object.values(componentMapping)) {
+        for (const [key, component] of Object.entries(componentMapping)) {
             if (component.scannedBarcode === barcode) {
-                return true;
+                return {
+                    isDuplicate: true,
+                    duplicateInfo: {
+                        componentName: component.name,
+                        componentKey: key,
+                        scanTime: component.verifiedAt
+                    }
+                };
             }
         }
         
-        return false;
+        return {
+            isDuplicate: false,
+            duplicateInfo: null
+        };
+    }
+
+    // Function to provide enhanced visual feedback for scanning process
+    function provideEnhancedVisualFeedback(result, component, barcode) {
+        const titleElement = document.getElementById('currentComponentTitle');
+        
+        if (result === 'success') {
+            // Success feedback
+            component.element.classList.remove('next', 'error');
+            component.element.classList.add('success');
+            
+            // Create a visual flash effect
+            const flash = document.createElement('div');
+            flash.className = 'scan-flash success-flash';
+            document.body.appendChild(flash);
+            
+            // Remove after animation completes
+            setTimeout(() => {
+                document.body.removeChild(flash);
+            }, 500);
+            
+            // Play success sound if available
+            const successSound = new Audio('/assets/sounds/success-beep.mp3');
+            successSound.volume = 0.5;
+            successSound.play().catch(e => console.log('Sound not supported or enabled'));
+            
+            // Update the title with check mark
+            titleElement.innerHTML = `<span style="color: #16a34a">✓</span> ${component.name} verified!`;
+            titleElement.style.color = '#16a34a';
+            
+            // Add success annotation to the component element
+            const checkIcon = document.createElement('div');
+            checkIcon.className = 'verification-icon verified';
+            checkIcon.innerHTML = '✓';
+            component.element.appendChild(checkIcon);
+        } 
+        else if (result === 'error') {
+            // Error feedback
+            component.element.classList.remove('success', 'next');
+            component.element.classList.add('error');
+            
+            // Create error flash effect
+            const flash = document.createElement('div');
+            flash.className = 'scan-flash error-flash';
+            document.body.appendChild(flash);
+            
+            // Remove after animation completes
+            setTimeout(() => {
+                document.body.removeChild(flash);
+                component.element.classList.remove('error');
+                component.element.classList.add('next');
+            }, 800);
+            
+            // Play error sound if available
+            const errorSound = new Audio('/assets/sounds/error-beep.mp3');
+            errorSound.volume = 0.5;
+            errorSound.play().catch(e => console.log('Sound not supported or enabled'));
+            
+            // Update the title with error message
+            titleElement.innerHTML = `<span style="color: #dc2626">✗</span> Invalid barcode for ${component.name}`;
+            titleElement.style.color = '#dc2626';
+            
+            // Add detailed error tooltip to the scan input
+            barcodeInput.dataset.tooltip = `Expected code: ${component.verificationCode} at position ${4 + 1}`;
+            barcodeInput.classList.add('tooltip-error');
+            
+            // Remove tooltip after a few seconds
+            setTimeout(() => {
+                barcodeInput.classList.remove('tooltip-error');
+                delete barcodeInput.dataset.tooltip;
+            }, 3000);
+        }
+        else if (result === 'duplicate') {
+            // Duplicate feedback - flash the component that already has this barcode
+            const duplicateElement = component.element;
+            duplicateElement.classList.add('duplicate-highlight');
+            
+            // Add pulsing effect
+            duplicateElement.classList.add('pulse-warning');
+            
+            // Remove after animation
+            setTimeout(() => {
+                duplicateElement.classList.remove('duplicate-highlight', 'pulse-warning');
+            }, 2000);
+            
+            // Play duplicate warning sound
+            const warningSound = new Audio('/assets/sounds/warning-beep.mp3');
+            warningSound.volume = 0.5;
+            warningSound.play().catch(e => console.log('Sound not supported or enabled'));
+            
+            // Show notification with which component already used this barcode
+            titleElement.innerHTML = `<span style="color: #f59e0b">⚠</span> Duplicate barcode - already used for ${component.name}`;
+            titleElement.style.color = '#f59e0b';
+        }
     }
 
     // Function to get assembly ID from URL parameters

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AssemblyProcess, AssemblyLog, ScannedPart
+from .models import AssemblyProcess, AssemblyLog, ScannedPart, CompletedAssembly
 
 class ScannedPartSerializer(serializers.ModelSerializer):
     class Meta:
@@ -17,4 +17,12 @@ class AssemblyProcessSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = AssemblyProcess
+        fields = '__all__'
+
+class CompletedAssemblySerializer(serializers.ModelSerializer):
+    scanned_components = serializers.JSONField(required=False)
+    rework_components = serializers.JSONField(required=False)
+    
+    class Meta:
+        model = CompletedAssembly
         fields = '__all__'

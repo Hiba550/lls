@@ -138,8 +138,89 @@ export const updateAssemblyProcessStatus = async (id, status) => {
   return api.patch(ENDPOINTS.ASSEMBLY_PROCESS(id), { status });
 };
 
+/**
+ * Save completed assembly data to the database
+ * @param {Object} assemblyData - Completed assembly data
+ * @returns {Promise<Object>} - Response from the database
+ */
+export const saveCompletedAssemblyToDatabase = async (assemblyData) => {
+  try {
+    const response = await fetch('/api/completed-assemblies/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        assembly_id: assemblyData.id,
+        barcode_number: assemblyData.barcodeNumber,
+        assembly_type: assemblyData.assemblyType,
+        completed_at: assemblyData.completedAt,
+        components: assemblyData.scannedComponents.map(comp => ({
+          component_name: comp.componentName,
+          item_code: comp.itemCode,
+          barcode: comp.barcode
+        }))
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save completed assembly: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving to database:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch completed assemblies
+ * @returns {Promise<Object>} - List of completed assemblies
+ */
+export const getCompletedAssemblies = async () => {
+  try {
+    const response = await api.get('/api/completed-assemblies/list/');
+    return response;
+  } catch (error) {
+    console.error('Error fetching completed assemblies:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a rework order
+ * @param {Object} reworkData - Rework order data
+ * @returns {Promise<Object>} - Created rework order
+ */
+export const createReworkOrder = async (reworkData) => {
+  try {
+    const response = await api.post('/api/assembly/rework/', reworkData);
+    return response;
+  } catch (error) {
+    console.error('Error creating rework order:', error);
+    throw error;
+  }
+};
+
+/**
+ * Complete an assembly
+ * @param {string|number} id - Assembly ID
+ * @param {Object} data - Completion data
+ * @returns {Promise<Object>} - Completion result
+ */
+export const completeAssembly = async (id, data) => {
+  try {
+    const response = await api.post(`/api/assembly-process/${id}/complete/`, data);
+    return response;
+  } catch (error) {
+    console.error('Error completing assembly:', error);
+    throw error;
+  }
+};
+
 // Export all functions
-export default {
+const assemblyApi = {
   fetchAssemblies,
   fetchAssemblyById,
   createAssembly,
@@ -152,4 +233,10 @@ export default {
   createAssemblyProcess,
   updateAssemblyProcess,
   updateAssemblyProcessStatus,
+  saveCompletedAssemblyToDatabase,
+  getCompletedAssemblies,
+  createReworkOrder,
+  completeAssembly,
 };
+
+export default assemblyApi;
