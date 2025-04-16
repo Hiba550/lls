@@ -14,3 +14,20 @@ export const getCSRFToken = () => {
   }
   return cookieValue;
 };
+
+// Add this to src/index.js or App.js (before rendering the app)
+import axios from 'axios';
+
+// Initialize CSRF token by making a GET request to the Django backend
+const initializeCsrf = async () => {
+  try {
+    // Make a GET request to an endpoint that sets the CSRF cookie
+    await axios.get('/api/csrf/', { withCredentials: true });
+    console.log('CSRF token initialized');
+  } catch (error) {
+    console.error('Failed to initialize CSRF token:', error);
+  }
+};
+
+// Call this function when the app initializes
+initializeCsrf();

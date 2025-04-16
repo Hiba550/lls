@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAdminUser, AllowAny
 from .models import ItemMaster, AssemblyProcess, AssemblyLog, ScannedPart, BOMComponent, PCBItem
 from .serializers import (
     ItemMasterSerializer, 
@@ -87,8 +87,7 @@ class ItemMasterViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['item_code', 'description', 'product']
     ordering_fields = ['item_code', 'sno', 'product']
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    permission_classes = [IsAdminUser]  # Only admin users can access
     
     @action(detail=False, methods=['GET'])
     def assembly_items(self, request):
@@ -189,8 +188,44 @@ class BOMComponentViewSet(viewsets.ModelViewSet):
     serializer_class = BOMComponentSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['parent_item__item_code', 'child_item__item_code', 'case_no']
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    permission_classes = [IsAdminUser]  # Only admin users can access
+    
+    @action(detail=False, methods=['POST'])
+    def add_multiple_components(self, request):
+        """Add multiple child components to a parent item at once"""
+        parent_item_id = request.data.get('parent_item')
+        child_items = request.data.get('child_items', [])
+        
+        if not parent_item_id:
+            return Response({"error": "parent_item is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if not child_items or not isinstance(child_items, list):
+            return Response({"error": "child_items must be a non-empty list"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        created_components = []
+        
+        try:
+            for child_item_data in child_items:
+                child_item_id = child_item_data.get('child_item')
+                quantity = child_item_data.get('quantity', 1)
+                case_no = child_item_data.get('case_no', '')
+                
+                serializer = self.get_serializer(data={
+                    'parent_item': parent_item_id,
+                    'child_item': child_item_id,
+                    'quantity': quantity,
+                    'case_no': case_no
+                })
+                
+                if serializer.is_valid():
+                    component = serializer.save()
+                    created_components.append(self.get_serializer(component).data)
+                else:
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response(created_components, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AssemblyProcessViewSet(viewsets.ModelViewSet):
     queryset = AssemblyProcess.objects.all()

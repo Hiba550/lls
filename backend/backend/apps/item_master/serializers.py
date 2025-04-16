@@ -2,9 +2,20 @@ from rest_framework import serializers
 from .models import ItemMaster, AssemblyProcess, AssemblyLog, ScannedPart, BOMComponent, PCBItem
 
 class ItemMasterSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(required=False, allow_null=True)
+    
     class Meta:
         model = ItemMaster
         fields = '__all__'
+        
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Convert image URL to absolute URL if image exists
+        if representation.get('image'):
+            request = self.context.get('request')
+            if request:
+                representation['image'] = request.build_absolute_uri(representation['image'])
+        return representation
 
 class PCBItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,6 +29,14 @@ class BOMComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BOMComponent
         fields = '__all__'
+        
+    def validate(self, data):
+        """
+        Check that parent and child items are not the same
+        """
+        if data.get('parent_item') == data.get('child_item'):
+            raise serializers.ValidationError("Parent and child items cannot be the same")
+        return data
 
 class ScannedPartSerializer(serializers.ModelSerializer):
     class Meta:

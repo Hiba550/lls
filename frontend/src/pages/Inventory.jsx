@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import axios from 'axios';
+import axios from 'axios'; // Add this import
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { fetchItemMaster, updateItem, patchItem } from '../api/itemMasterApi';
+import { fetchItemMaster, updateItem, createItem, createBomComponent } from '../api/itemMasterApi';
+import { useAuth } from '../context/AuthContext';
+import ItemForm from '../components/forms/ItemForm';
 
 const Inventory = () => {
+  const { hasRole, user } = useAuth();
+  const isAdmin = hasRole('admin');
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -16,26 +21,61 @@ const Inventory = () => {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showViewDetails, setShowViewDetails] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [newItem, setNewItem] = useState({
-    item_code: '',
-    description: '',
-    type: 'Part',
-    uom: 'Nos',
-    quantity: 0
-  });
+
+  // Add this function somewhere in your component
+  const checkAvailableEndpoints = async () => {
+    try {
+      // Try different potential API roots
+      const potentialEndpoints = [
+        '/api/',
+        '/api/item-master/',
+        '/api/item-master/bom-components/'
+      ];
+      
+      for (const endpoint of potentialEndpoints) {
+        try {
+          const response = await axios.get(endpoint);
+          console.log(`Endpoint ${endpoint} exists:`, response.data);
+        } catch (error) {
+          console.log(`Error with ${endpoint}:`, error.response?.status || error.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking endpoints:', error);
+    }
+  };
 
   useEffect(() => {
-    fetchItems();
-  }, []);
+    if (isAdmin) {
+      fetchItems();
+      checkAvailableEndpoints(); // Add this line
+    }
+  }, [isAdmin]);
 
   const fetchItems = async () => {
     try {
       setLoading(true);
+      
+      // List all available API endpoints for debugging
+      console.log("Attempting to fetch from API...");
+      
       const data = await fetchItemMaster();
+      console.log("API response successful:", data);
+      
       setItems(Array.isArray(data) ? data : []);
       setError(null);
     } catch (error) {
       console.error('Error fetching items:', error);
+      
+      // Try to identify the correct endpoint
+      console.log("Trying alternative endpoints for debugging...");
+      try {
+        const response = await axios.get('/api'); // Try to get API root
+        console.log("API root endpoints:", response.data);
+      } catch (rootError) {
+        console.error("Couldn't access API root:", rootError);
+      }
+      
       setError('Failed to load inventory items. Please try again.');
       setItems([]);
     } finally {
@@ -52,71 +92,132 @@ const Inventory = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewItem(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSelectedItemChange = (e) => {
-    const { name, value } = e.target;
-    setSelectedItem(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleNumberInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewItem(prev => ({
-      ...prev,
-      [name]: value === '' ? '' : Number(value)
-    }));
-  };
-
-  const handleSelectedNumberInputChange = (e) => {
-    const { name, value } = e.target;
-    setSelectedItem(prev => ({
-      ...prev,
-      [name]: value === '' ? '' : Number(value)
-    }));
-  };
-
-  const handleAddItem = async (e) => {
-    e.preventDefault();
-    
-    // Validate required fields
-    if (!newItem.item_code || !newItem.description) {
-      toast.error('Item code and description are required');
-      return;
-    }
-    
+  const handleAddItem = async (formData) => {
     try {
       setLoading(true);
-      const response = await axios.post('/api/item-master/', newItem);
+
+      // Create FormData object for file uploads
+      const form = new FormData();
       
-      // Add the new item to the list
-      setItems(prev => [...prev, response.data]);
-      
-      // Reset form
-      setNewItem({
-        item_code: '',
-        description: '',
-        type: 'Part',
-        uom: 'Nos',
-        quantity: 0
+      // Add all form fields to FormData
+      Object.keys(formData).forEach((key) => {
+        // Handle checkboxes and boolean values explicitly
+        if (typeof formData[key] === 'boolean') {
+          form.append(key, formData[key] ? 'true' : 'false');
+        }
+        // Handle files
+        else if (key === 'image' && formData[key] instanceof File) {
+          form.append(key, formData[key]);
+        }
+        // Skip null/undefined values
+        else if (formData[key] !== null && formData[key] !== undefined) {
+          form.append(key, formData[key]);
+        }
       });
       
-      // Close form
-      setShowAddForm(false);
+      // Add required fields that might be missing with default values
+      if (!formData.hasOwnProperty('sno') || !form.has('sno')) {
+        form.append('sno', '');
+      }
+      
+      if (!formData.hasOwnProperty('type') || !form.has('type')) {
+        form.append('type', 'Part');
+      }
+      
+      if (!formData.hasOwnProperty('item_code') || !form.has('item_code')) {
+        form.append('item_code', '');
+      }
+      
+      if (!formData.hasOwnProperty('description') || !form.has('description')) {
+        form.append('description', '');
+      }
+      
+      // Log the form data for debugging
+      console.log('Submitting form with:', Object.fromEntries(form.entries()));
+      
+      const response = await createItem(form);
+      
+      // Add the new item to the list
+      setItems((prev) => [...prev, response]);
       
       // Show success message
       toast.success('Item created successfully');
+      
+      // Reset form state
+      setShowAddForm(false);
+      
+      // Refresh item list
+      fetchItems();
     } catch (error) {
       console.error('Error creating item:', error);
-      toast.error('Failed to create item. ' + (error.response?.data?.message || error.message));
+      
+      // Better error message with more details
+      let errorMessage = 'Failed to create item';
+      
+      if (error.response?.data) {
+        // If we have field-specific errors, show them in detail
+        if (typeof error.response.data === 'object') {
+          const errors = Object.entries(error.response.data)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+            .join('; ');
+          errorMessage += `: ${errors}`;
+        } else if (error.response.data.detail) {
+          errorMessage += `: ${error.response.data.detail}`;
+        } else if (typeof error.response.data === 'string') {
+          errorMessage += `: ${error.response.data}`;
+        }
+      } else if (error.message) {
+        errorMessage += `: ${error.message}`;
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditItem = (item) => {
+    setSelectedItem(item);
+    setShowEditForm(true);
+    setShowViewDetails(false);
+  };
+
+  const handleUpdateItem = async (formData) => {
+    try {
+      setLoading(true);
+
+      // Create FormData object for file uploads
+      const form = new FormData();
+
+      // Add all form fields to FormData
+      Object.keys(formData).forEach((key) => {
+        if (key === 'image' && formData[key] instanceof File) {
+          form.append(key, formData[key]);
+        } else {
+          form.append(key, formData[key]);
+        }
+      });
+
+      await updateItem(selectedItem.id, form);
+
+      // Update the item in the local state
+      setItems(
+        items.map((item) =>
+          item.id === selectedItem.id ? { ...item, ...formData } : item
+        )
+      );
+
+      // Close form
+      setShowEditForm(false);
+
+      // Show success message
+      toast.success(`Updated item ${formData.item_code} successfully`);
+
+      // Refresh to get latest data
+      fetchItems();
+    } catch (error) {
+      console.error('Error updating item:', error);
+      toast.error(`Failed to update item: ${error.response?.data?.detail || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -128,538 +229,197 @@ const Inventory = () => {
     setShowEditForm(false);
   };
 
-  const handleEditItem = (item) => {
-    setSelectedItem(item);
-    setShowEditForm(true);
-    setShowViewDetails(false);
-  };
-
-  const handleUpdateItem = async (e) => {
-    e.preventDefault();
-    
-    if (!selectedItem || !selectedItem.id) {
-      toast.error('No item selected for update');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // Only update the quantity field to avoid changing other data
-      await patchItem(selectedItem.id, {
-        quantity: selectedItem.quantity
-      });
-      
-      // Update the item in the local state
-      setItems(items.map(item => 
-        item.id === selectedItem.id ? { ...item, quantity: selectedItem.quantity } : item
-      ));
-      
-      // Close form
-      setShowEditForm(false);
-      
-      // Show success message
-      toast.success(`Updated quantity for ${selectedItem.item_code}`);
-    } catch (error) {
-      console.error('Error updating item:', error);
-      toast.error('Failed to update item. ' + (error.response?.data?.message || error.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const closeItemDetails = () => {
     setShowViewDetails(false);
     setShowEditForm(false);
     setSelectedItem(null);
   };
 
-  const handleImportItems = async () => {
+  const handleAddBomComponent = async (bomData) => {
     try {
       setLoading(true);
-      const response = await axios.post('/api/item-master/import_data/', { items: parsedItems });
-      toast.success(`Imported ${response.data.total} items successfully`);
-      fetchItems(); // Refresh the item list
+
+      // For each child item, create a BOM component
+      const promises = bomData.child_items.map((childId) => {
+        return createBomComponent({
+          parent_item: bomData.parent_item,
+          child_item: childId,
+          quantity: bomData.quantity,
+          case_no: bomData.case_no,
+        });
+      });
+
+      await Promise.all(promises);
+
+      // Refresh items to get updated data
+      fetchItems();
+
+      toast.success('BOM components added successfully');
     } catch (error) {
-      console.error('Error importing items:', error);
-      toast.error('Failed to import items. ' + (error.response?.data?.message || error.message));
+      console.error('Error adding BOM components:', error);
+      toast.error(`Failed to add BOM components: ${error.response?.data?.detail || error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredItems = items.filter(item => {
-    return item.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredItems = items.filter((item) => {
+    return (
+      item.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   const sortedItems = [...filteredItems].sort((a, b) => {
     if (!a[sortField] && !b[sortField]) return 0;
     if (!a[sortField]) return 1;
     if (!b[sortField]) return -1;
-    
+
     const comparison = String(a[sortField]).localeCompare(String(b[sortField]));
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
+  // Show unauthorized message for non-admin users
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 px-4">
+        <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md border-l-4 border-yellow-500">
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">Unauthorized Access</h2>
+          <div className="flex items-center mb-4 bg-yellow-50 p-3 rounded">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6 text-yellow-500 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m0 0v2m0-2h2m-2 0H9m3-4V7a3 3 0 00-3-3H9m1.5-1l-1 1m0 0l-1-1m1 1v1M9 7h1m2 0h1m2 0h1m-6 0H9"
+              />
+            </svg>
+            <p className="text-yellow-700">This section is restricted to administrators only.</p>
+          </div>
+          <p className="text-gray-600 mb-4">
+            You are signed in as: <span className="font-semibold">{user?.username || user?.email || 'Unknown User'}</span>
+          </p>
+          <p className="text-gray-600">
+            Please contact your administrator if you need access to inventory management.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
-      <div className="p-6 bg-red-100 border border-red-300 rounded-md text-red-700">
+      <div className="p-6 bg-red-100 border border-red-400 rounded-md text-red-700">
         <h2 className="text-xl font-bold mb-2">Error</h2>
         <p>{error}</p>
-        <button 
-          onClick={() => fetchItems()}
-          className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Retry
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <ToastContainer position="top-right" autoClose={3000} />
-      
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex justify-between items-center"
-      >
-        <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
-            {showAddForm ? 'Cancel' : 'Add Item'}
-          </button>
-        </div>
-      </motion.div>
-      
-      {/* Add New Item Form */}
-      {showAddForm && (
-        <motion.div 
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white p-6 rounded-lg shadow-md mb-6"
-        >
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">Add New Inventory Item</h3>
-          
-          <form onSubmit={handleAddItem} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Code *</label>
-                <input
-                  type="text"
-                  name="item_code"
-                  value={newItem.item_code}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <select
-                  name="type"
-                  value={newItem.type}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="Part">Part</option>
-                  <option value="BOM">Bill of Materials</option>
-                </select>
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                <input
-                  type="text"
-                  name="description"
-                  value={newItem.description}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">UOM</label>
-                <select
-                  name="uom"
-                  value={newItem.uom}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="Nos">Nos</option>
-                  <option value="Mts">Meters</option>
-                  <option value="Kg">Kg</option>
-                  <option value="Liter">Liter</option>
-                  <option value="Pack">Pack</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                <input
-                  type="number"
-                  name="quantity"
-                  min="0"
-                  value={newItem.quantity}
-                  onChange={handleNumberInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end space-x-3 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                {loading ? 'Saving...' : 'Save Item'}
-              </button>
-            </div>
-          </form>
-        </motion.div>
-      )}
+    <div className="container mx-auto px-4 py-6">
+      <ToastContainer position="bottom-right" autoClose={5000} />
+      <h1 className="text-2xl font-bold mb-6">Inventory Management</h1>
 
-      {/* View Item Details */}
-      {showViewDetails && selectedItem && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white p-6 rounded-lg shadow-md mb-6"
-        >
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Item Details</h3>
-            <button 
-              onClick={closeItemDetails}
-              className="p-1 rounded-full hover:bg-gray-100"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-500">S.No</p>
-              <p className="text-md font-semibold">{selectedItem.sno}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Item Code</p>
-              <p className="text-md font-semibold">{selectedItem.item_code}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Type</p>
-              <p className="text-md">
-                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  selectedItem.type === 'Part' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                }`}>
-                  {selectedItem.type}
-                </span>
-              </p>
-            </div>
-            <div className="md:col-span-2">
-              <p className="text-sm font-medium text-gray-500">Description</p>
-              <p className="text-md">{selectedItem.description}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">UOM</p>
-              <p className="text-md">{selectedItem.uom}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Quantity</p>
-              <p className="text-md">{selectedItem.quantity} {selectedItem.uom}</p>
-            </div>
-            {selectedItem.product && (
-              <div>
-                <p className="text-sm font-medium text-gray-500">Product</p>
-                <p className="text-md">{selectedItem.product}</p>
-              </div>
-            )}
-            {selectedItem.code && (
-              <div>
-                <p className="text-sm font-medium text-gray-500">Code</p>
-                <p className="text-md">{selectedItem.code}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-6">
-            <button
-              onClick={() => handleEditItem(selectedItem)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Edit Item
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Edit Item Form */}
-      {showEditForm && selectedItem && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white p-6 rounded-lg shadow-md mb-6"
-        >
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Edit Item</h3>
-            <button 
-              onClick={closeItemDetails}
-              className="p-1 rounded-full hover:bg-gray-100"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <form onSubmit={handleUpdateItem} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Code</label>
-                <input
-                  type="text"
-                  name="item_code"
-                  value={selectedItem.item_code}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <input
-                  type="text"
-                  name="type"
-                  value={selectedItem.type}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
-                />
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <input
-                  type="text"
-                  name="description"
-                  value={selectedItem.description}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">UOM</label>
-                <input
-                  type="text"
-                  name="uom"
-                  value={selectedItem.uom}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                <input
-                  type="number"
-                  name="quantity"
-                  min="0"
-                  value={selectedItem.quantity}
-                  onChange={handleSelectedNumberInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end space-x-3 pt-3">
-              <button
-                type="button"
-                onClick={closeItemDetails}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                {loading ? 'Updating...' : 'Update Item'}
-              </button>
-            </div>
-          </form>
-        </motion.div>
-      )}
-      
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="mb-6">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
+      <div className="mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 mb-4">
+          <div className="w-full md:w-1/3">
             <input
               type="text"
-              placeholder="Search by item code or description"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              placeholder="Search by item code or description..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="w-full md:w-auto">
+            <ItemForm
+              onSubmit={handleAddItem}
+              onCancel={() => setShowAddForm(false)}
+              items={items}
+              handleAddBomComponent={handleAddBomComponent}
+              fetchItems={fetchItems}
             />
           </div>
         </div>
-        
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th 
-                  scope="col" 
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSort('sno')}
                 >
-                  <div className="flex items-center">
-                    S.No
-                    {sortField === 'sno' && (
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 ml-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        {sortDirection === 'asc' ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        )}
-                      </svg>
-                    )}
-                  </div>
+                  S.No
+                  {sortField === 'sno' && (
+                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
                 </th>
-                <th 
-                  scope="col" 
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSort('item_code')}
                 >
-                  <div className="flex items-center">
-                    Item Code
-                    {sortField === 'item_code' && (
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 ml-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        {sortDirection === 'asc' ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        )}
-                      </svg>
-                    )}
-                  </div>
+                  Item Code
+                  {sortField === 'item_code' && (
+                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
                 </th>
-                <th 
-                  scope="col" 
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSort('description')}
                 >
-                  <div className="flex items-center">
-                    Description
-                    {sortField === 'description' && (
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 ml-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        {sortDirection === 'asc' ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        )}
-                      </svg>
-                    )}
-                  </div>
+                  Description
+                  {sortField === 'description' && (
+                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
                 </th>
-                <th 
-                  scope="col" 
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSort('type')}
                 >
-                  <div className="flex items-center">
-                    Type
-                    {sortField === 'type' && (
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 ml-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        {sortDirection === 'asc' ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        )}
-                      </svg>
-                    )}
-                  </div>
+                  Type
+                  {sortField === 'type' && (
+                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
                 </th>
-                <th 
-                  scope="col" 
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => handleSort('uom')}
+                >
+                  UOM
+                  {sortField === 'uom' && (
+                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </th>
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSort('quantity')}
                 >
-                  <div className="flex items-center">
-                    Quantity
-                    {sortField === 'quantity' && (
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className="h-4 w-4 ml-1" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        {sortDirection === 'asc' ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        )}
-                      </svg>
-                    )}
-                  </div>
+                  Quantity
+                  {sortField === 'quantity' && (
+                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Actions
                 </th>
               </tr>
@@ -667,67 +427,240 @@ const Inventory = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
-                    Loading...
+                  <td colSpan="7" className="px-6 py-4 text-center">
+                    <div className="flex justify-center items-center">
+                      <svg
+                        className="animate-spin h-5 w-5 mr-3 text-blue-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Loading...
+                    </div>
                   </td>
                 </tr>
               ) : sortedItems.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
-                    {searchTerm ? 'No items match your search' : 'No items available'}
+                  <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
+                    {searchTerm ? 'No items match your search.' : 'No items found. Add some items to get started.'}
                   </td>
                 </tr>
               ) : (
-                sortedItems.map((item, index) => (
-                  <motion.tr 
-                    key={item.id || index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className="hover:bg-gray-50"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {item.sno || index + 1}
+                sortedItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.sno}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {item.item_code}
                     </td>
-                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {item.description}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        item.type === 'Part' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {item.type}
-                      </span>
+                      {item.type}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.quantity} {item.uom}
+                      {item.uom}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        className="text-indigo-600 hover:text-indigo-900 mr-3"
-                        onClick={() => handleViewItem(item)}
-                      >
-                        View
-                      </button>
-                      <button
-                        className="text-green-600 hover:text-green-900"
-                        onClick={() => handleEditItem(item)}
-                      >
-                        Edit
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.quantity}
                     </td>
-                  </motion.tr>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                      <div className="flex justify-center space-x-4">
+                        <button
+                          onClick={() => handleViewItem(item)}
+                          className="text-blue-600 hover:text-blue-900 flex items-center"
+                        >
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleEditItem(item)}
+                          className="text-indigo-600 hover:text-indigo-900 flex items-center"
+                        >
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* View Details Modal */}
+      {showViewDetails && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-screen overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">Item Details: {selectedItem.item_code}</h3>
+                <button onClick={closeItemDetails} className="text-gray-400 hover:text-gray-500">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Item details rendered here */}
+                <div>
+                  <p className="text-sm font-medium text-gray-500">S.No</p>
+                  <p className="mt-1">{selectedItem.sno || '-'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Item Code</p>
+                  <p className="mt-1">{selectedItem.item_code}</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Description</p>
+                  <p className="mt-1">{selectedItem.description}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Type</p>
+                  <p className="mt-1">{selectedItem.type}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">UOM</p>
+                  <p className="mt-1">{selectedItem.uom || '-'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Code</p>
+                  <p className="mt-1">{selectedItem.code || '-'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">U Oper Name</p>
+                  <p className="mt-1">{selectedItem.u_oper_name || '-'}</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Processes</p>
+                  <div className="mt-1 flex space-x-4">
+                    <span className={`inline-flex items-center ${selectedItem.assembly ? 'text-green-600' : 'text-gray-400'}`}>
+                      <svg className="h-5 w-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={selectedItem.assembly ? "M5 13l4 4L19 7" : "M6 18L18 6M6 6l12 12"} />
+                      </svg>
+                      Assembly
+                    </span>
+                    <span className={`inline-flex items-center ${selectedItem.burn_test ? 'text-green-600' : 'text-gray-400'}`}>
+                      <svg className="h-5 w-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={selectedItem.burn_test ? "M5 13l4 4L19 7" : "M6 18L18 6M6 6l12 12"} />
+                      </svg>
+                      Burn Test
+                    </span>
+                    <span className={`inline-flex items-center ${selectedItem.packing ? 'text-green-600' : 'text-gray-400'}`}>
+                      <svg className="h-5 w-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={selectedItem.packing ? "M5 13l4 4L19 7" : "M6 18L18 6M6 6l12 12"} />
+                      </svg>
+                      Packing
+                    </span>
+                  </div>
+                </div>
+
+                {selectedItem.image && (
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-medium text-gray-500">Image</p>
+                    <div className="mt-1">
+                      <img src={selectedItem.image} alt={selectedItem.item_code} className="max-w-xs object-cover rounded" />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Weight</p>
+                  <p className="mt-1">{selectedItem.weight || '-'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Rev No</p>
+                  <p className="mt-1">{selectedItem.rev_no || '0'}</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Rev Reason</p>
+                  <p className="mt-1">{selectedItem.rev_reason || '-'}</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Customer Complaint Info</p>
+                  <p className="mt-1">{selectedItem.customer_complaint_info || '-'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Quantity</p>
+                  <p className="mt-1">{selectedItem.quantity}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => handleEditItem(selectedItem)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Edit Item
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Form Modal */}
+      {showEditForm && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-900">Edit Item: {selectedItem.item_code}</h3>
+                <button onClick={closeItemDetails} className="text-gray-400 hover:text-gray-500">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              <ItemForm
+                initialData={selectedItem}
+                onSubmit={handleUpdateItem}
+                onCancel={closeItemDetails}
+                items={items}
+                handleAddBomComponent={handleAddBomComponent}
+                fetchItems={fetchItems}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default Inventory; 
+export default Inventory;

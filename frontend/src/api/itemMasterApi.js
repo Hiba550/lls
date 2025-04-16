@@ -1,6 +1,43 @@
 import axios from 'axios';
 
-const API_URL = '/api';
+// Configure axios to handle cookies (needed for CSRF)
+axios.defaults.withCredentials = true;
+
+// Get CSRF token from cookies
+const getCsrfToken = () => {
+  const name = 'csrftoken=';
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const cookieArray = decodedCookie.split(';');
+  
+  for (let cookie of cookieArray) {
+    while (cookie.charAt(0) === ' ') {
+      cookie = cookie.substring(1);
+    }
+    if (cookie.indexOf(name) === 0) {
+      return cookie.substring(name.length, cookie.length);
+    }
+  }
+  return '';
+};
+
+// Get auth token from local storage
+const getAuthHeader = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Get headers with CSRF token
+const getHeaders = (contentType = 'application/json') => {
+  const csrfToken = getCsrfToken();
+  return {
+    ...getAuthHeader(),
+    'Content-Type': contentType,
+    'X-CSRFToken': csrfToken,
+  };
+};
+
+// Remove the version number from the API URL since it's not used in your backend
+const API_BASE_URL = '/api';
 
 // Mock data for development when API is not available
 const MOCK_ITEMS = [
@@ -50,31 +87,22 @@ const MOCK_PCB_ITEMS = [
 // Fetch all items
 export const fetchItemMaster = async () => {
   try {
-    const response = await axios.get(`${API_URL}/item-master/`);
-    console.log('Item master response:', response.data);
+    const response = await axios.get(`${API_BASE_URL}/item-master/`, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching items:', error);
-    
-    // More detailed error logging
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    } else if (error.request) {
-      console.error('No response received:', error.request);
-    } else {
-      console.error('Error message:', error.message);
-    }
-    
-    // For development, return mock data instead of throwing
-    return MOCK_ITEMS;
+    throw error;
   }
 };
 
 // Fetch a single item by ID
 export const fetchItemById = async (id) => {
   try {
-    const response = await axios.get(`${API_URL}/item-master/${id}/`);
+    const response = await axios.get(`${API_BASE_URL}/items/${id}/`, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error(`Error fetching item with ID ${id}:`, error);
@@ -83,18 +111,22 @@ export const fetchItemById = async (id) => {
 };
 
 // Create a new item
-export const createItem = async (itemData) => {
+export const createItem = async (data) => {
   try {
-    // Fix the URL path - remove the duplicate "item-master"
-    const response = await axios.post(`${API_URL}/item-master/`, itemData);
+    // Log what we're sending for debugging
+    console.log('Creating item with data:', Object.fromEntries(data.entries()));
+    
+    const response = await axios.post('/api/item-master/', data, {
+      headers: getHeaders('multipart/form-data')
+    });
     return response.data;
   } catch (error) {
     console.error('Error creating item:', error);
     
-    // More detailed error logging
+    // Enhanced error logging
     if (error.response) {
+      console.error('Server responded with:', error.response.status);
       console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
     }
     
     throw error;
@@ -102,20 +134,14 @@ export const createItem = async (itemData) => {
 };
 
 // Update an existing item
-export const updateItem = async (id, itemData) => {
+export const updateItem = async (id, data) => {
   try {
-    // Use the dedicated update_item endpoint with PUT method
-    const response = await axios.put(`${API_URL}/item-master/${id}/update_item/`, itemData);
+    const response = await axios.put(`${API_BASE_URL}/item-master/${id}/`, data, {
+      headers: getHeaders('multipart/form-data') // For handling file uploads
+    });
     return response.data;
   } catch (error) {
     console.error('Error updating item:', error);
-    
-    // More detailed error logging
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    }
-    
     throw error;
   }
 };
@@ -123,17 +149,12 @@ export const updateItem = async (id, itemData) => {
 // Partially update an item
 export const patchItem = async (id, partialData) => {
   try {
-    // Use the dedicated update_item endpoint with PATCH method for partial updates
-    const response = await axios.patch(`${API_URL}/item-master/${id}/update_item/`, partialData);
+    const response = await axios.patch(`${API_BASE_URL}/items/${id}/`, partialData, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error('Error patching item:', error);
-    
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    }
-    
     throw error;
   }
 };
@@ -141,8 +162,9 @@ export const patchItem = async (id, partialData) => {
 // Delete an item
 export const deleteItem = async (id) => {
   try {
-    // Fix the URL path - remove the duplicate "item-master"
-    await axios.delete(`${API_URL}/item-master/${id}/`);
+    await axios.delete(`${API_BASE_URL}/items/${id}/`, {
+      headers: getHeaders()
+    });
     return true;
   } catch (error) {
     console.error(`Error deleting item with ID ${id}:`, error);
@@ -150,10 +172,12 @@ export const deleteItem = async (id) => {
   }
 };
 
-// Fetch BOM components for a specific item code - update to match your API structure
+// Fetch BOM components for a specific item code
 export const fetchBomComponents = async (itemCode) => {
   try {
-    const response = await axios.get(`${API_URL}/item-master/bom/${itemCode}/`);
+    const response = await axios.get(`${API_BASE_URL}/bom-components/${itemCode}/`, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error(`Error fetching BOM components for item ${itemCode}:`, error);
@@ -161,38 +185,43 @@ export const fetchBomComponents = async (itemCode) => {
   }
 };
 
+// Create a new BOM component
+export const createBomComponent = async (data) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/bom-components/`, data, {
+      headers: getHeaders()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error creating BOM component:', error);
+    throw error;
+  }
+};
+
 // Fetch all PCB items
 export const fetchPCBItems = async (category = null) => {
   try {
-    let url = `${API_URL}/pcb-items/`;
+    let url = `${API_BASE_URL}/pcb-items/`;
     if (category) {
-      url = `${API_URL}/pcb-items/by_category/?category=${category}`;
+      url = `${API_BASE_URL}/pcb-items/by_category/?category=${category}`;
     }
     
-    const response = await axios.get(url);
+    const response = await axios.get(url, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching PCB items:', error);
-    
-    // More detailed error logging
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    } else if (error.request) {
-      console.error('No response received:', error.request);
-    } else {
-      console.error('Error message:', error.message);
-    }
-    
-    // For development, return mock data instead of throwing
-    return MOCK_PCB_ITEMS;
+    throw error;
   }
 };
 
 // Fetch a single PCB item by ID
 export const fetchPCBItemById = async (id) => {
   try {
-    const response = await axios.get(`${API_URL}/pcb-items/${id}/`);
+    const response = await axios.get(`${API_BASE_URL}/pcb-items/${id}/`, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error(`Error fetching PCB item with ID ${id}:`, error);
@@ -203,17 +232,12 @@ export const fetchPCBItemById = async (id) => {
 // Create a new PCB item
 export const createPCBItem = async (itemData) => {
   try {
-    const response = await axios.post(`${API_URL}/pcb-items/`, itemData);
+    const response = await axios.post(`${API_BASE_URL}/pcb-items/`, itemData, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error('Error creating PCB item:', error);
-    
-    // More detailed error logging
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    }
-    
     throw error;
   }
 };
@@ -221,17 +245,12 @@ export const createPCBItem = async (itemData) => {
 // Update an existing PCB item
 export const updatePCBItem = async (id, itemData) => {
   try {
-    const response = await axios.put(`${API_URL}/pcb-items/${id}/`, itemData);
+    const response = await axios.put(`${API_BASE_URL}/pcb-items/${id}/`, itemData, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error('Error updating PCB item:', error);
-    
-    // More detailed error logging
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    }
-    
     throw error;
   }
 };
@@ -239,16 +258,12 @@ export const updatePCBItem = async (id, itemData) => {
 // Import multiple PCB items
 export const importPCBItems = async (items) => {
   try {
-    const response = await axios.post(`${API_URL}/pcb-items/import_data/`, { items });
+    const response = await axios.post(`${API_BASE_URL}/pcb-items/import_data/`, { items }, {
+      headers: getHeaders()
+    });
     return response.data;
   } catch (error) {
     console.error('Error importing PCB items:', error);
-    
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-      console.error('Response status:', error.response.status);
-    }
-    
     throw error;
   }
 };
