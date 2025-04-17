@@ -219,6 +219,87 @@ export const completeAssembly = async (id, data) => {
   }
 };
 
+/**
+ * Get assembly component details
+ * @param {string|number} assemblyId - Assembly ID
+ * @returns {Promise<Array>} - List of component details
+ */
+export const getAssemblyComponentDetails = async (assemblyId) => {
+  try {
+    const response = await api.get(`/api/assembly-process/${assemblyId}/components/`);
+    return response;
+  } catch (error) {
+    console.error('Error fetching component details:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create rework assembly process
+ * @param {Object} reworkData - Data for rework assembly
+ * @returns {Promise<Object>} - Created rework assembly process
+ */
+export const createReworkAssembly = async (reworkData) => {
+  try {
+    const response = await api.post('/api/assembly-process/rework/', {
+      original_assembly_id: reworkData.originalAssemblyId,
+      barcode_number: reworkData.barcodeNumber, // Use original barcode
+      components_to_rework: reworkData.componentsToRework,
+      rework_notes: reworkData.reworkNotes,
+      reworked_by: reworkData.reworkedBy || 'Current User'
+    });
+    return response;
+  } catch (error) {
+    console.error('Error creating rework assembly:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update component in an assembly
+ * @param {string|number} assemblyId - Assembly ID
+ * @param {string|number} componentId - Component ID to update
+ * @param {Object} componentData - Updated component data
+ * @returns {Promise<Object>} - Updated component
+ */
+export const updateAssemblyComponent = async (assemblyId, componentId, componentData) => {
+  try {
+    const response = await api.patch(
+      `/api/assembly-process/${assemblyId}/components/${componentId}/`, 
+      componentData
+    );
+    return response;
+  } catch (error) {
+    console.error('Error updating component:', error);
+    throw error;
+  }
+};
+
+/**
+ * Mark component as changed in rework
+ * @param {string|number} assemblyId - Assembly ID
+ * @param {string|number} componentId - Component ID
+ * @param {Object} data - Change data with new barcode
+ * @returns {Promise<Object>} - Updated component
+ */
+export const markComponentChanged = async (assemblyId, componentId, data) => {
+  try {
+    const response = await api.post(
+      `/api/assembly-process/${assemblyId}/components/${componentId}/change/`, 
+      {
+        new_barcode: data.newBarcode,
+        change_reason: data.reason,
+        changed_by: data.changedBy || 'Current User',
+        previous_barcode: data.previousBarcode
+      }
+    );
+    return response;
+  } catch (error) {
+    console.error('Error marking component as changed:', error);
+    throw error;
+  }
+};
+
 // Export all functions
 const assemblyApi = {
   fetchAssemblies,
@@ -237,6 +318,10 @@ const assemblyApi = {
   getCompletedAssemblies,
   createReworkOrder,
   completeAssembly,
+  getAssemblyComponentDetails,
+  createReworkAssembly,
+  updateAssemblyComponent,
+  markComponentChanged,
 };
 
 export default assemblyApi;

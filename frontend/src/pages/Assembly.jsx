@@ -175,6 +175,34 @@ const Assembly = () => {
     loadMachineTypes();
   }, []);
 
+  // Load completed orders from localStorage
+  useEffect(() => {
+    const loadCompletedOrders = () => {
+      try {
+        // Try to load from both storage locations for backward compatibility
+        const completedWorkOrders = JSON.parse(localStorage.getItem('completedWorkOrders') || '[]');
+        const assemblyCompletedOrders = JSON.parse(localStorage.getItem('assemblyCompletedOrders') || '[]');
+        
+        // Merge the two arrays, removing duplicates by ID
+        const mergedOrders = [...completedWorkOrders];
+        
+        // Add items from assemblyCompletedOrders that aren't already in mergedOrders
+        assemblyCompletedOrders.forEach(order => {
+          if (!mergedOrders.some(existingOrder => existingOrder.id === order.id)) {
+            mergedOrders.push(order);
+          }
+        });
+        
+        setCompletedOrders(mergedOrders);
+      } catch (error) {
+        console.error('Error loading completed orders:', error);
+        setCompletedOrders([]);
+      }
+    };
+    
+    loadCompletedOrders();
+  }, []);
+
   // Update assembly progress when parts are scanned
   useEffect(() => {
     if (bom.length > 0) {
@@ -194,12 +222,12 @@ const Assembly = () => {
   };
 
   const generateBarcodeNumber = () => {
-    const date = new Date();
-    const year = date.getFullYear().toString().slice(2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const randomNumber = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-    return `${year}${month}${day}-${randomNumber}`;
+    // Generate an 11-digit random barcode with '2' in 5th position and '4' in 6th position
+    const prefix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const suffix = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+    
+    // Combine with the required '2' in 5th position and '4' in 6th position
+    return prefix + '24' + suffix;
   };
 
   const handleSelectOrder = async (order) => {

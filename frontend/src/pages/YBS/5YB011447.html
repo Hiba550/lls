@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive YBS Machine Circuit Board Layout - 5YB011447</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         :root {
             --left-pcb-color: #b5e6b5;
@@ -2092,6 +2093,68 @@
                 restartButton.addEventListener('click', async function() {
                     await restartAssembly();
                 });
+            }
+
+            // Function to generate a random barcode with 'D' in 5th position and '4' in 6th position
+            function generateAssemblyBarcode() {
+                // Generate random digits for positions 1-4
+                const prefix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+                
+                // Generate random digits for positions 7-11
+                const suffix = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+                
+                // Combine with fixed 'D' in 5th position and '4' in 6th position
+                return prefix + 'D4' + suffix;
+            }
+
+            // Function to render barcode image
+            function renderBarcode(elementId, barcodeValue) {
+                try {
+                    JsBarcode(`#${elementId}`, barcodeValue, {
+                        format: "CODE128",
+                        lineColor: "#000",
+                        width: 2,
+                        height: 60,
+                        displayValue: true,
+                        fontSize: 16,
+                        margin: 10
+                    });
+                } catch (e) {
+                    console.error("JsBarcode rendering failed:", e);
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        element.textContent = `Error rendering barcode: ${barcodeValue}`;
+                    }
+                }
+            }
+
+            // Function to store completed work order in localStorage
+            function storeCompletedWorkOrder(orderData) {
+                try {
+                    // Get existing completed orders from both storage locations
+                    const completedOrders = JSON.parse(localStorage.getItem('completedWorkOrders') || '[]');
+                    const assemblyCompletedOrders = JSON.parse(localStorage.getItem('assemblyCompletedOrders') || '[]');
+
+                    // Create the completed order object structure expected by Assembly.jsx
+                    const completedEntry = {
+                        id: orderData.id,
+                        status: 'Completed',
+                        product: orderData.product || `YBS Assembly`, 
+                        item_code: orderData.item_code || '5YB011447',
+                        serial_number: orderData.barcode_number, // Use the generated barcode
+                        completed_at: new Date().toISOString()
+                    };
+                    
+                    // Add to both arrays
+                    completedOrders.push(completedEntry);
+                    assemblyCompletedOrders.push(completedEntry);
+                    
+                    // Store back in localStorage
+                    localStorage.setItem('completedWorkOrders', JSON.stringify(completedOrders));
+                    localStorage.setItem('assemblyCompletedOrders', JSON.stringify(assemblyCompletedOrders));
+                } catch (error) {
+                    console.error('Error storing completed work order:', error);
+                }
             }
 
             // Initialize the page

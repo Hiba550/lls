@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive YBS Machine Circuit Board Layout - Assembly Verification</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         :root {
             --left-pcb-color: #b5e6b5;
@@ -700,6 +701,8 @@
         }
     </style>
     <script>
+        let currentWorkOrderDetails = null; // To store fetched work order details
+
         document.addEventListener('DOMContentLoaded', function() {
             // Existing sensor barcode mapping code
             const sensorBarcodes = {
@@ -929,6 +932,138 @@
                 
                 progressFill.style.width = `${progressPercent}%`;
                 progressPercentage.textContent = `${progressPercent}%`;
+            }
+
+            // Generate a random barcode with '2' in 5th position and '5' in 6th position
+            function generateAssemblyBarcode() {
+                // Generate random digits for positions 1-4
+                const prefix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+                
+                // Generate random digits for positions 7-11
+                const suffix = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+                
+                // Combine with fixed '2' in 5th position and '5' in 6th position
+                return prefix + '25' + suffix;
+            }
+
+            // Function to render barcode image
+            function renderBarcode(elementId, barcodeValue) {
+                try {
+                    JsBarcode(`#${elementId}`, barcodeValue, {
+                        format: "CODE128",
+                        lineColor: "#000",
+                        width: 2,
+                        height: 60,
+                        displayValue: true,
+                        fontSize: 16,
+                        margin: 10
+                    });
+                } catch (e) {
+                    console.error("JsBarcode rendering failed:", e);
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        element.textContent = `Error rendering barcode: ${barcodeValue}`;
+                    }
+                }
+            }
+
+            // Function to store completed work order in localStorage
+            function storeCompletedWorkOrder(orderData) {
+                try {
+                    // Get existing completed orders from both storage locations
+                    const completedOrders = JSON.parse(localStorage.getItem('completedWorkOrders') || '[]');
+                    const assemblyCompletedOrders = JSON.parse(localStorage.getItem('assemblyCompletedOrders') || '[]');
+
+                    // Create the completed order object structure expected by Assembly.jsx
+                    const completedEntry = {
+                        id: orderData.id,
+                        status: 'Completed',
+                        product: orderData.product || `YBS 24-Duct Assembly`, 
+                        item_code: orderData.item_code || '5YB011057',
+                        serial_number: orderData.barcode_number, // Use the generated barcode
+                        completed_at: orderData.completed_at,
+                        reworked: orderData.reworked || false,
+                        metadata: {
+                            scanned_parts: orderData.metadata?.scanned_parts || []
+                        }
+                    };
+
+                    // Add to 'completedWorkOrders' if not already present
+                    if (!completedOrders.some(order => order.id === orderData.id)) {
+                        completedOrders.push(completedEntry);
+                        localStorage.setItem('completedWorkOrders', JSON.stringify(completedOrders));
+                    }
+
+                    // Add to 'assemblyCompletedOrders' if not already present
+                    if (!assemblyCompletedOrders.some(order => order.id === orderData.id)) {
+                        assemblyCompletedOrders.push(completedEntry);
+                        localStorage.setItem('assemblyCompletedOrders', JSON.stringify(assemblyCompletedOrders));
+                    }
+
+                    addLogEntry(`Assembly ${orderData.id} saved to completed orders locally`, 'success');
+                } catch (error) {
+                    console.error('Error storing completed work order locally:', error);
+                    addLogEntry('Failed to store completion status locally', 'warning');
+                }
+            }
+
+            // Function to move a work order from pending to completed in localStorage
+            function moveWorkOrderToCompleted(assemblyId) {
+                try {
+                    // Get pending and completed work orders from localStorage
+                    const pendingWorkOrders = JSON.parse(localStorage.getItem('pendingWorkOrders') || '[]');
+                    const completedWorkOrders = JSON.parse(localStorage.getItem('assemblyCompletedOrders') || '[]');
+
+                    // Find the work order in pending list
+                    const workOrderIndex = pendingWorkOrders.findIndex(order => order.id === assemblyId);
+
+                    if (workOrderIndex !== -1) {
+                        // Remove from pending
+                        const workOrder = pendingWorkOrders.splice(workOrderIndex, 1)[0];
+
+                        // Mark as completed
+                        workOrder.status = 'Completed';
+                        workOrder.completed_at = new Date().toISOString();
+
+                        // Add to completed if not already there
+                        if (!completedWorkOrders.some(order => order.id === assemblyId)) {
+                            completedWorkOrders.push(workOrder);
+                        }
+
+                        // Save updated lists back to localStorage
+                        localStorage.setItem('pendingWorkOrders', JSON.stringify(pendingWorkOrders));
+                        localStorage.setItem('assemblyCompletedOrders', JSON.stringify(completedWorkOrders));
+
+                        addLogEntry(`Work order ${assemblyId} moved from pending to completed locally`, 'success');
+                    } else {
+                        addLogEntry(`Work order ${assemblyId} not found in local pending list`, 'warning');
+                    }
+                } catch (error) {
+                    console.error('Error moving work order locally:', error);
+                    addLogEntry('Error updating local work order status', 'error');
+                }
+            }
+
+            // Fetch work order details for proper data in completed work orders
+            async function fetchWorkOrderDetails(workOrderId) {
+                if (!workOrderId) return null;
+                try {
+                    const response = await fetch(`/api/work-order/${workOrderId}/`);
+                    if (response.ok) {
+                        const woData = await response.json();
+                        currentWorkOrderDetails = {
+                            id: woData.id,
+                            item_code: woData.item_code,
+                            product: woData.product
+                        };
+                        addLogEntry(`Fetched details for Work Order: ${woData.item_code} - ${woData.product}`, 'info');
+                        return currentWorkOrderDetails;
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch work order details:', error);
+                    addLogEntry(`Failed to fetch details for Work Order #${workOrderId}`, 'warning');
+                }
+                return null;
             }
 
             // Component definitions for YBS Machine - 24 Duct Assembly
@@ -1409,31 +1544,324 @@
                 // Focus the barcode input
                 barcodeInput.focus();
             }
-            
-            // Event listeners
-            scanButton.addEventListener('click', function() {
-                const barcode = barcodeInput.value.trim();
-                if (barcode) {
-                    verifyBarcode(barcode);
-                    barcodeInput.value = '';
-                } else {
-                    showNotification('Please enter a barcode', 'error');
-                }
-                barcodeInput.focus();
-            });
-            
-            barcodeInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    const barcode = barcodeInput.value.trim();
-                    if (barcode) {
-                        verifyBarcode(barcode);
-                        barcodeInput.value = '';
-                    } else {
-                        showNotification('Please enter a barcode', 'error');
+
+            // Add createAssemblyProcess and loadAssemblyState functions for completeness
+            async function createAssemblyProcess(workOrderId) {
+                try {
+                    // Fetch details for the selected work order before creating assembly process
+                    await fetchWorkOrderDetails(workOrderId);
+
+                    // Create a new assembly process
+                    const assemblyData = {
+                        work_order: workOrderId,
+                        assembly_type: 'YBS',
+                        status: 'in_progress',
+                        metadata: {
+                            current_sequence_index: 1,
+                            scanned_sensors: []
+                        }
+                    };
+
+                    const response = await fetch('/api/assembly-process/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(assemblyData)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to create assembly process');
                     }
+
+                    const data = await response.json();
+                    assemblyId = data.id;
+
+                    // Store the assembly ID in localStorage
+                    localStorage.setItem('currentYBS24AssemblyId', assemblyId);
+                    localStorage.setItem('currentSensorIndex', '1');
+
+                    addLogEntry(`Created new assembly process with ID: ${assemblyId}`, 'success');
+                    return data;
+                } catch (error) {
+                    console.error('Error creating assembly process:', error);
+                    addLogEntry(`Error creating assembly process: ${error.message}`, 'error');
+                    return null;
+                }
+            }
+
+            async function loadAssemblyState() {
+                // Get assembly ID from localStorage or URL parameters
+                const params = new URLSearchParams(window.location.search);
+                const id = localStorage.getItem('currentYBS24AssemblyId') || params.get('assemblyId');
+                const workOrderId = params.get('workOrderId');
+
+                if (!id && workOrderId) {
+                    // No existing assembly, but we have a work order ID
+                    // Create a new assembly process
+                    return await createAssemblyProcess(workOrderId);
+                } else if (!id) {
+                    // No assembly ID and no work order ID
+                    addLogEntry('No assembly ID found. Please start a new assembly from the dashboard.', 'warning');
+                    return false;
+                }
+
+                // We have an assembly ID, load its state
+                assemblyId = id;
+
+                try {
+                    const response = await fetch(`/api/assembly-process/${id}/`);
+                    if (!response.ok) {
+                        throw new Error('Failed to load assembly process');
+                    }
+
+                    const data = await response.json();
+
+                    // Fetch associated work order details if not already loaded
+                    if (!currentWorkOrderDetails && data.work_order) {
+                        await fetchWorkOrderDetails(data.work_order);
+                    }
+
+                    // Set the current sensor index from metadata or localStorage
+                    if (data.metadata && data.metadata.current_sequence_index) {
+                        currentSensorIndex = data.metadata.current_sequence_index;
+                    } else {
+                        const savedIndex = localStorage.getItem('currentSensorIndex');
+                        if (savedIndex) {
+                            currentSensorIndex = parseInt(savedIndex);
+                        }
+                    }
+
+                    // Load scanned sensors from metadata or localStorage
+                    if (data.metadata && data.metadata.scanned_sensors) {
+                        // Load from API data
+                        const apiScannedSensors = data.metadata.scanned_sensors;
+                        for (const sensor of apiScannedSensors) {
+                            scannedSensors.push({
+                                sensorId: sensor.id,
+                                barcode: sensor.barcode,
+                                timestamp: sensor.scan_time,
+                                status: 'success'
+                            });
+                        }
+                    } else {
+                        // Try to load from localStorage
+                        const savedScannedSensors = localStorage.getItem('scannedSensors');
+                        if (savedScannedSensors) {
+                            scannedSensors = JSON.parse(savedScannedSensors);
+                        }
+                    }
+
+                    // Update the UI to reflect the loaded state
+                    updateProgress();
+                    
+                    // Highlight next item
+                    if (currentSensorIndex <= 6) {
+                        const componentsArray = Object.values(components).sort((a, b) => a.index - b.index);
+                        const nextComponent = componentsArray.find(comp => !comp.scanned);
+                        if (nextComponent) {
+                            nextComponent.element.classList.add('next');
+                        }
+                    } else {
+                        const sensorIdToHighlight = currentSensorIndex - 6;
+                        if (sensorCells[sensorIdToHighlight]) {
+                            sensorCells[sensorIdToHighlight].classList.add('next');
+                        }
+                    }
+
+                    addLogEntry(`Loaded assembly process #${id}. Current sensor index: ${currentSensorIndex}`, 'info');
+                    return true;
+                } catch (error) {
+                    console.error('Error loading assembly state:', error);
+                    addLogEntry(`Error loading assembly: ${error.message}`, 'error');
+                    return false;
+                }
+            }
+
+            // Replace the existing completeButton click handler with this enhanced version
+            completeButton.addEventListener('click', async function() {
+                // Disable the button to prevent double-clicks
+                completeButton.disabled = true;
+                
+                try {
+                    // Verify all items are scanned (24 sensors + 6 components = 30 items)
+                    if (scannedSensors.length < 30) {
+                        showNotification(`Cannot complete: Only ${scannedSensors.length}/30 items scanned.`, 'error');
+                        addLogEntry(`Completion blocked: Not all items scanned.`, 'error');
+                        completeButton.disabled = false;
+                        return;
+                    }
+                    
+                    // Show processing message
+                    showNotification('Processing...', 'info');
+                    addLogEntry('Completing assembly process...', 'info');
+
+                    // Generate the final assembly barcode
+                    const finalAssemblyBarcode = generateAssemblyBarcode();
+                    addLogEntry(`Generated Assembly Barcode: ${finalAssemblyBarcode}`, 'info');
+
+                    // Prepare detailed scanned parts data
+                    const scannedPartsDetails = [];
+                    
+                    // Add components
+                    Object.entries(components).forEach(([key, comp]) => {
+                        if (comp.scanned) {
+                            // Handle timestamp safely
+                            let formattedScanTime;
+                            try {
+                                const scanData = scannedSensors.find(s => s.sensorId === `component_${comp.index}`);
+                                const scanTime = scanData?.timestamp || new Date();
+                                
+                                if (scanTime instanceof Date) {
+                                    formattedScanTime = scanTime.toISOString();
+                                } else if (typeof scanTime === 'string') {
+                                    formattedScanTime = scanTime;
+                                } else {
+                                    formattedScanTime = new Date().toISOString();
+                                }
+                            } catch (e) {
+                                formattedScanTime = new Date().toISOString();
+                            }
+
+                            scannedPartsDetails.push({
+                                type: 'component',
+                                id: key,
+                                name: comp.name,
+                                item_code: comp.item_code,
+                                scanned_barcode: comp.scannedBarcode || 'N/A',
+                                scan_time: formattedScanTime
+                            });
+                        }
+                    });
+                    
+                    // Add sensors
+                    scannedSensors.forEach(sensor => {
+                        if (sensor && sensor.status === 'success' && 
+                            typeof sensor.sensorId === 'number' || 
+                            (typeof sensor.sensorId === 'string' && sensor.sensorId.startsWith('component_'))) {
+                            
+                            // Skip components, only include actual sensors
+                            if (typeof sensor.sensorId === 'string' && sensor.sensorId.startsWith('component_')) {
+                                return; // Skip to next iteration
+                            }
+                            
+                            // Handle timestamp safely
+                            let formattedTimestamp;
+                            try {
+                                if (sensor.timestamp instanceof Date) {
+                                    formattedTimestamp = sensor.timestamp.toISOString();
+                                } else if (typeof sensor.timestamp === 'string') {
+                                    formattedTimestamp = sensor.timestamp;
+                                } else {
+                                    formattedTimestamp = new Date().toISOString();
+                                }
+                            } catch (e) {
+                                formattedTimestamp = new Date().toISOString();
+                            }
+                            
+                            // Find the item code for this sensor
+                            let itemCode;
+                            if ([1, 16, 24].includes(sensor.sensorId)) {
+                                itemCode = sensorItemCodes[sensor.sensorId];
+                            } else {
+                                itemCode = defaultSensorItemCode;
+                            }
+
+                            scannedPartsDetails.push({
+                                type: 'sensor',
+                                id: sensor.sensorId,
+                                name: `Sensor #${sensor.sensorId}`,
+                                item_code: itemCode,
+                                scanned_barcode: sensor.barcode,
+                                scan_time: formattedTimestamp
+                            });
+                        }
+                    });
+
+                    // Prepare data for API submission
+                    const assemblyData = {
+                        status: 'completed',
+                        completed_at: new Date().toISOString(),
+                        notes: 'Assembly completed via YBS 24-Duct assembly interface',
+                        operator: 'Current User', // Replace with actual user if available
+                        barcode_number: finalAssemblyBarcode,
+                        metadata: {
+                            current_sequence_index: currentSensorIndex,
+                            scanned_parts: scannedPartsDetails
+                        }
+                    };
+
+                    // Make the API call to update the assembly process
+                    const response = await fetch(`/api/assembly-process/${assemblyId}/`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(assemblyData)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.text();
+                        throw new Error(`Failed to complete assembly: ${response.status} ${response.statusText} - ${errorData}`);
+                    }
+
+                    const data = await response.json();
+
+                    // Create data object for local storage functions
+                    const localStorageOrderData = {
+                        id: assemblyId,
+                        product: currentWorkOrderDetails?.product || 'YBS 24-Duct Assembly',
+                        item_code: currentWorkOrderDetails?.item_code || '5YB011057',
+                        barcode_number: finalAssemblyBarcode,
+                        completed_at: assemblyData.completed_at,
+                        metadata: assemblyData.metadata
+                    };
+
+                    // Update localStorage to move this order to completed
+                    storeCompletedWorkOrder(localStorageOrderData);
+                    moveWorkOrderToCompleted(assemblyId);
+
+                    // Success - show notification and final screen
+                    showNotification('Assembly completed successfully!', 'success');
+                    addLogEntry(`Assembly ${assemblyId} completed successfully! Final Barcode: ${finalAssemblyBarcode}`, 'success');
+
+                    // Clear localStorage for this specific assembly on completion
+                    localStorage.removeItem('currentYBS24AssemblyId');
+                    localStorage.removeItem('currentSensorIndex');
+                    localStorage.removeItem('scannedSensors');
+
+                    // Display completion screen with barcode
+                    document.getElementById('mainContainer').innerHTML = `
+                        <div style="text-align: center; padding: 2rem; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.5rem;">
+                            <h2 style="color: #16a34a; margin-bottom: 1rem">Assembly Completed Successfully!</h2>
+                            <p style="margin-bottom: 0.5rem">Assembly ID: ${assemblyId}</p>
+                            <p style="margin-bottom: 1.5rem">24-Duct YBS Assembly</p>
+
+                            <div style="background-color: #f1f5f9; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 2rem; display: inline-block;">
+                                <h3 style="margin-bottom: 1rem; color: #334155;">Generated Assembly Barcode</h3>
+                                <svg id="finalAssemblyBarcode" style="max-width: 100%; height: auto;"></svg>
+                            </div>
+
+                            <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center">
+                                <button onclick="window.location.href='/assembly'"
+                                        style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem;
+                                            border: none; border-radius: 0.375rem; cursor: pointer;">
+                                    Return to Assembly List
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    // Render the barcode image
+                    renderBarcode('finalAssemblyBarcode', finalAssemblyBarcode);
+                } catch (error) {
+                    console.error('Error completing assembly:', error);
+                    showNotification(`Failed to complete assembly: ${error.message}`, 'error');
+                    addLogEntry(`Error completing assembly: ${error.message}`, 'error');
+                    completeButton.disabled = false;
                 }
             });
-            
+
             // Start initialization
             initPage();
         });
@@ -1551,3 +1979,4 @@
     <div id="notification" class="notification"></div>
 </body>
 </html>
+``` 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive YBS Machine Circuit Board Layout - 5YB011111</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         :root {
             --left-pcb-color: #b5e6b5;
@@ -1743,6 +1744,18 @@
                     
                     const data = await response.json();
                     
+                    // Generate final assembly barcode
+                    const finalAssemblyBarcode = generateAssemblyBarcode();
+                    addLogEntry(`Generated Assembly Barcode: ${finalAssemblyBarcode}`, 'info');
+                    
+                    // Store completed work order
+                    storeCompletedWorkOrder({
+                        id: assemblyId,
+                        barcode_number: finalAssemblyBarcode,
+                        product: "YBS Assembly",
+                        item_code: "5YB011111"
+                    });
+                    
                     // Success - show notification and redirect
                     showNotification('Assembly completed successfully!', 'success');
                     addLogEntry('Assembly completed successfully!', 'success');
@@ -1757,7 +1770,14 @@
                         document.getElementById('mainContainer').innerHTML = `
                             <div style="text-align: center; padding: 2rem">
                                 <h2 style="color: #16a34a; margin-bottom: 1rem">Assembly Completed Successfully!</h2>
-                                <p style="margin-bottom: 2rem">Assembly ID: ${assemblyId}</p>
+                                <p style="margin-bottom: 0.5rem">Assembly ID: ${assemblyId}</p>
+                                <p style="margin-bottom: 1.5rem">YBS Assembly</p>
+
+                                <div style="background-color: #f1f5f9; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 2rem; display: inline-block;">
+                                    <h3 style="margin-bottom: 1rem; color: #334155;">Generated Assembly Barcode</h3>
+                                    <svg id="finalAssemblyBarcode" style="max-width: 100%; height: auto;"></svg>
+                                </div>
+                                
                                 <div style="display: flex; gap: 1rem; justify-content: center">
                                     <button onclick="window.location.href='/assembly/ybs'"
                                             style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
@@ -1767,6 +1787,9 @@
                                 </div>
                             </div>
                         `;
+                        
+                        // Render the barcode image
+                        renderBarcode('finalAssemblyBarcode', finalAssemblyBarcode);
                     }, 1000);
                     
                     return true;
@@ -2176,6 +2199,39 @@
             // Start initialization
             initPage();
         });
+
+        // Function to generate a random barcode with '7' in 5th position and '3' in 6th position
+        function generateAssemblyBarcode() {
+            // Generate random digits for positions 1-4
+            const prefix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            
+            // Generate random digits for positions 7-11
+            const suffix = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+            
+            // Combine with fixed '7' in 5th position and '3' in 6th position
+            return prefix + '73' + suffix;
+        }
+
+        // Function to render barcode image
+        function renderBarcode(elementId, barcodeValue) {
+            try {
+                JsBarcode(`#${elementId}`, barcodeValue, {
+                    format: "CODE128",
+                    lineColor: "#000",
+                    width: 2,
+                    height: 60,
+                    displayValue: true,
+                    fontSize: 16,
+                    margin: 10
+                });
+            } catch (e) {
+                console.error("JsBarcode rendering failed:", e);
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.textContent = `Error rendering barcode: ${barcodeValue}`;
+                }
+            }
+        }
     </script>
 </body>
 </html>
