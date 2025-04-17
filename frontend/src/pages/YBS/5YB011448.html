@@ -1448,8 +1448,13 @@
                     
                     if (codeVerified) {
                         // Success - mark the sensor as scanned
-                        sensorCells[sensorIdToCheck].classList.remove('next');
-                        sensorCells[sensorIdToCheck].classList.add('success');
+                        if (sensorCells[sensorIdToCheck]) {
+                            sensorCells[sensorIdToCheck].classList.remove('next');
+                            sensorCells[sensorIdToCheck].classList.add('success');
+                        } else {
+                            console.warn(`Sensor cell #${sensorIdToCheck} not found in DOM`);
+                            // Continue with other operations even if the cell element isn't found
+                        }
                         
                         // Add to scanned sensors list
                         const newSensor = {
@@ -2175,13 +2180,16 @@
                 setupInteractionEffects();
                 setupEventListeners();
                 
+                // MISSING CODE: Initialize the sensorCells object
+                document.querySelectorAll('.sensor-cell').forEach(cell => {
+                    const sensorId = parseInt(cell.getAttribute('data-sensor-id'));
+                    if (!isNaN(sensorId)) {
+                        sensorCells[sensorId] = cell;
+                    }
+                });
+                
                 // First fetch verification codes from API
                 const success = await getVerificationCodes();
-                
-                if (!success) {
-                    // If API failed, we cannot continue (the error has already been displayed)
-                    return;
-                }
                 
                 // Now load assembly state
                 await loadAssemblyState();
