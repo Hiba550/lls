@@ -1,12 +1,14 @@
 from django.shortcuts import render
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.utils import timezone
 from rest_framework.permissions import AllowAny
+from django.db.models import Q
 from .models import AssemblyProcess, ScannedPart, AssemblyLog, CompletedAssembly, AssemblyOperationLog
 from .serializers import AssemblyProcessSerializer, ScannedPartSerializer, AssemblyLogSerializer, CompletedAssemblySerializer
 from ..work_order.models import WorkOrder
+from ..item_master.models import ItemMaster
 from django.db import transaction
 from django.http import JsonResponse
 import json
@@ -44,11 +46,18 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
             
             # Create serial number
             serial_number = f"5YB-{year}{month}{day}-{sequential_number}"
-            
-            # Create assembly process 
+              # Get the ItemMaster for this work order
+            try:
+                item_master = ItemMaster.objects.get(item_code=work_order.item_code)
+            except ItemMaster.DoesNotExist:
+                return Response(
+                    {"error": f"ItemMaster with code {work_order.item_code} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+              # Create assembly process 
             assembly = AssemblyProcess.objects.create(
                 work_order=work_order,
-                item=work_order.item if hasattr(work_order, 'item') else None,
+                item=item_master,
                 serial_number=serial_number,
                 status='pending',
                 created_by=request.data.get('created_by', 'System'),
@@ -116,8 +125,7 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
                 assembly_process=assembly_process,
                 action='Part Scanned',
                 details=f"Sensor {sensor_id}: Part {request.data.get('part_code')} scanned successfully",
-                operator=request.data.get('operator', 'Unknown')
-            )
+                operator=request.data.get('operator', 'Unknown')            )
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -126,7 +134,6 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
     def update_sensor_index(self, request, pk=None):
         """Update the current sensor index"""
         assembly_process = self.get_object()
-        
         if assembly_process.status not in ['pending', 'in_progress']:
             return Response(
                 {"error": "Cannot update sensor index for a completed or rejected assembly"}, 
@@ -150,7 +157,7 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['POST'])
     def complete(self, request, pk=None):
-        """Complete an assembly process"""
+        """Complete an assembly process with enhanced multi-quantity support"""
         assembly_process = self.get_object()
         
         if assembly_process.status not in ['pending', 'in_progress']:
@@ -161,80 +168,96 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
         
         notes = request.data.get('notes')
         operator = request.data.get('operator', 'Unknown')
+        barcode_number = request.data.get('barcode_number')
+        metadata = request.data.get('metadata', {})
         
         try:
-            # Mark as completed
-            assembly_process.status = 'completed'
-            assembly_process.completed_at = timezone.now()
-            assembly_process.quantity_completed = 1
-            assembly_process.notes = notes
-            assembly_process.save()
-            
-            # Add scanned parts if provided
-            scanned_parts = request.data.get('scanned_parts', [])
-            for part in scanned_parts:
-                if not ScannedPart.objects.filter(
-                    assembly_process=assembly_process, 
-                    sensor_id=part.get('sensorId')
-                ).exists():
-                    ScannedPart.objects.create(
-                        assembly_process=assembly_process,
-                        part_code=part.get('part_code'),
-                        sensor_id=part.get('sensorId'),
-                        operator=part.get('operator', operator)
+            with transaction.atomic():
+                # Mark as completed
+                assembly_process.status = 'completed'
+                assembly_process.completed_at = timezone.now()
+                assembly_process.quantity_completed = 1
+                assembly_process.notes = notes
+                if barcode_number:
+                    assembly_process.barcode_number = barcode_number
+                if metadata:
+                    assembly_process.metadata = metadata
+                assembly_process.save()
+                
+                # Add scanned parts if provided
+                scanned_parts = request.data.get('scanned_parts', [])
+                for part in scanned_parts:
+                    if not ScannedPart.objects.filter(
+                        assembly_process=assembly_process, 
+                        sensor_id=part.get('sensorId')
+                    ).exists():
+                        ScannedPart.objects.create(
+                            assembly_process=assembly_process,
+                            part_code=part.get('part_code'),
+                            sensor_id=part.get('sensorId'),
+                            operator=part.get('operator', operator)
+                        )
+                
+                # Update work order status and create next unit if needed
+                work_order = assembly_process.work_order
+                work_order.complete_unit()  # Use the model method to handle completion
+                
+                # Create next assembly if this is a multi-unit work order
+                next_unit = None
+                if work_order.can_complete_unit():
+                    # Generate next serial number
+                    date = timezone.now()
+                    year = str(date.year)[2:]
+                    month = str(date.month).zfill(2)
+                    day = str(date.day).zfill(2)
+                    sequential_number = str(work_order.completed_quantity + 1).zfill(4)
+                    
+                    # Determine prefix based on work order item code
+                    prefix = "5YB"  # Default
+                    if work_order.item_code and work_order.item_code.startswith('5RS'):
+                        prefix = "5RS"
+                    
+                    next_serial = f"{prefix}-{year}{month}{day}-{sequential_number}"
+                    
+                    next_unit = AssemblyProcess.objects.create(
+                        work_order=work_order,
+                        serial_number=next_serial,
+                        status='pending',
+                        created_by=operator
                     )
-            
-            # Update work order status if all units are complete
-            work_order = assembly_process.work_order
-            completed_assemblies = AssemblyProcess.objects.filter(
-                work_order=work_order, 
-                status='completed'
-            ).count()
-            
-            if completed_assemblies >= work_order.quantity:
-                work_order.status = 'Completed'
-                work_order.save()
-            elif work_order.status == 'Pending':
-                work_order.status = 'In Progress'
-                work_order.save()
-            
-            # Create next assembly if this is a multi-unit work order
-            next_unit = None
-            if completed_assemblies < work_order.quantity:
-                # Generate next serial number
-                date = timezone.now()
-                year = str(date.year)[2:]
-                month = str(date.month).zfill(2)
-                day = str(date.day).zfill(2)
-                sequential_number = str(completed_assemblies + 1).zfill(4)
                 
-                next_serial = f"5YB-{year}{month}{day}-{sequential_number}"
-                
-                next_unit = AssemblyProcess.objects.create(
-                    work_order=work_order,
-                    serial_number=next_serial,
-                    status='pending',
-                    created_by=operator
+                # Create a log entry
+                AssemblyLog.objects.create(
+                    assembly_process=assembly_process,
+                    action='Assembly Completed',
+                    details=f"Assembly {assembly_process.serial_number} completed successfully. Work order progress: {work_order.completed_quantity}/{work_order.quantity}",
+                    operator=operator
                 )
-            
-            # Create a log entry
-            AssemblyLog.objects.create(
-                assembly_process=assembly_process,
-                action='Assembly Completed',
-                details=f"Assembly {assembly_process.serial_number} completed successfully",
-                operator=operator
-            )
-            
-            # Return the response
-            response_data = self.get_serializer(assembly_process).data
-            if next_unit:
-                response_data['next_unit'] = {
-                    'id': next_unit.id,
-                    'serial_number': next_unit.serial_number
+                
+                # Return enhanced response with work order status
+                response_data = self.get_serializer(assembly_process).data
+                response_data['work_order_status'] = {
+                    'id': work_order.id,
+                    'completed_quantity': work_order.completed_quantity,
+                    'total_quantity': work_order.quantity,
+                    'remaining_quantity': work_order.remaining_quantity,
+                    'completion_percentage': work_order.completion_percentage,
+                    'is_fully_completed': work_order.is_fully_completed,
+                    'status': work_order.status
                 }
-            
-            return Response(response_data)
-            
+                
+                if next_unit:
+                    response_data['next_unit'] = {
+                        'id': next_unit.id,
+                        'serial_number': next_unit.serial_number,
+                        'status': next_unit.status
+                    }
+                    response_data['next_action'] = f"Continue with unit {work_order.completed_quantity + 1} of {work_order.quantity}"
+                else:
+                    response_data['next_action'] = "Work order fully completed"
+                
+                return Response(response_data)
+                
         except Exception as e:
             return Response(
                 {"error": str(e)},
@@ -269,6 +292,7 @@ class AssemblyProcessViewSet(viewsets.ModelViewSet):
             )
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def create_completed_assembly(request):
     """Create a new completed assembly record with proper component tracking"""
     try:
@@ -294,10 +318,64 @@ def create_completed_assembly(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_completed_assemblies(request):
-    """Get all completed assemblies"""
+    """Get all completed assemblies with existing work orders"""
     try:
-        assemblies = CompletedAssembly.objects.all()
+        from ..work_order.models import WorkOrder
+        
+        # Get all existing work order IDs
+        existing_work_order_ids = set(WorkOrder.objects.values_list('id', flat=True))
+        
+        # Filter completed assemblies to only include those with existing work orders
+        # Convert work_order string to int and check if it exists in the WorkOrder table
+        assemblies = CompletedAssembly.objects.filter(
+            work_order__isnull=False,
+            work_order__gt=''  # Also exclude empty strings
+        )
+        
+        # Further filter to only include assemblies whose work_order ID exists in WorkOrder table
+        valid_assemblies = []
+        for assembly in assemblies:
+            try:
+                work_order_id = int(assembly.work_order)
+                if work_order_id in existing_work_order_ids:
+                    valid_assemblies.append(assembly.id)
+            except (ValueError, TypeError):
+                # Skip assemblies with invalid work_order values
+                continue
+        
+        # Get the filtered queryset
+        assemblies = CompletedAssembly.objects.filter(id__in=valid_assemblies)
+        
+        # Apply date filtering if provided
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        search_query = request.GET.get('search', '').strip()
+        
+        if start_date:
+            try:
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                assemblies = assemblies.filter(completed_at__date__gte=start_date)
+            except ValueError:
+                pass
+                
+        if end_date:
+            try:
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                assemblies = assemblies.filter(completed_at__date__lte=end_date)
+            except ValueError:
+                pass
+                
+        # Apply search filtering
+        if search_query:
+            assemblies = assemblies.filter(
+                Q(serial_number__icontains=search_query) |
+                Q(barcode_number__icontains=search_query) |
+                Q(product__icontains=search_query) |
+                Q(item_code__icontains=search_query)
+            )
+        
         serializer = CompletedAssemblySerializer(assemblies, many=True)
         return Response(serializer.data)
     except Exception as e:
@@ -579,37 +657,177 @@ def update_component_barcode(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 def get_assembly_logs(request):
-    """Get comprehensive assembly logs for audit trail"""
+    """Get comprehensive assembly logs for audit trail or create new log entries"""
     try:
-        assembly_id = request.GET.get('assembly_id')
-        
-        if assembly_id:
-            logs = AssemblyOperationLog.objects.filter(
-                assembly_id=assembly_id
-            ).order_by('-timestamp')
-        else:
-            logs = AssemblyOperationLog.objects.all().order_by('-timestamp')[:100]
-        
-        logs_data = [{
-            'id': log.id,
-            'assembly_id': log.assembly_id,
-            'action': log.action,
-            'details': log.details,
-            'operator': log.operator,
-            'timestamp': log.timestamp.isoformat()
-        } for log in logs]
-        
-        return JsonResponse({
-            'logs': logs_data,
-            'count': len(logs_data)
-        })
+        if request.method == 'GET':
+            assembly_id = request.GET.get('assembly_id')
+            
+            if assembly_id:
+                logs = AssemblyOperationLog.objects.filter(
+                    assembly_id=assembly_id
+                ).order_by('-timestamp')
+            else:
+                logs = AssemblyOperationLog.objects.all().order_by('-timestamp')[:100]
+            
+            logs_data = [{
+                'id': log.id,
+                'assembly_id': log.assembly_id,
+                'action': log.action,
+                'details': log.details,
+                'operator': log.operator,
+                'timestamp': log.timestamp.isoformat()
+            } for log in logs]
+            
+            return JsonResponse({
+                'logs': logs_data,
+                'count': len(logs_data)
+            })
+            
+        elif request.method == 'POST':
+            # Handle POST requests to create new log entries
+            data = request.data
+            
+            # Create new log entry
+            log_entry = create_assembly_log(
+                assembly_id=data.get('assembly_id', ''),
+                action=data.get('action', 'GENERAL_LOG'),
+                details=data.get('details', {}),
+                operator=data.get('operator', 'System')
+            )
+            
+            if log_entry:
+                return JsonResponse({
+                    'id': log_entry.id,
+                    'assembly_id': log_entry.assembly_id,
+                    'action': log_entry.action,
+                    'details': log_entry.details,
+                    'operator': log_entry.operator,
+                    'timestamp': log_entry.timestamp.isoformat(),
+                    'status': 'success',
+                    'message': 'Log entry created successfully'
+                }, status=201)
+            else:
+                return JsonResponse({
+                    'error': 'Failed to create log entry'
+                }, status=500)
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-# Helper functions
+@api_view(['POST'])
+def complete_work_order_unit(request):
+    """Complete one unit of a work order with proper quantity tracking"""
+    try:
+        with transaction.atomic():
+            data = request.data
+            work_order_id = data.get('work_order_id')
+            
+            if not work_order_id:
+                return JsonResponse({'error': 'work_order_id is required'}, status=400)
+            
+            # Get the work order
+            try:
+                work_order = WorkOrder.objects.get(id=work_order_id)
+            except WorkOrder.DoesNotExist:
+                return JsonResponse({'error': f'Work order {work_order_id} not found'}, status=404)
+            
+            # Check if unit can be completed
+            if not work_order.can_complete_unit():
+                return JsonResponse({
+                    'error': 'All units have already been completed',
+                    'completed_quantity': work_order.completed_quantity,
+                    'total_quantity': work_order.quantity
+                }, status=400)
+            
+            # Generate consistent barcode numbers if not provided
+            if not data.get('workOrderBarcodeNumber'):
+                data['workOrderBarcodeNumber'] = generate_work_order_barcode()
+            
+            if not data.get('assemblyBarcodeNumber'):
+                data['assemblyBarcodeNumber'] = generate_assembly_barcode(
+                    work_order.pcb_type.code if work_order.pcb_type else 'YBS'
+                )
+            
+            # Create the completed assembly record for this unit
+            assembly = CompletedAssembly.objects.create(
+                work_order=str(work_order.id),
+                product=work_order.product,
+                item_code=work_order.item_code,
+                serial_number=data.get('assemblyBarcodeNumber'),
+                barcode_number=data.get('workOrderBarcodeNumber'),
+                completed_at=data.get('completedAt', timezone.now()),
+                is_rework=work_order.is_rework,
+                reworked=False,
+                original_assembly_id=data.get('original_assembly_id'),
+                zone=data.get('zone', 'Assembly'),
+                reworked_by=data.get('completedBy'),
+                rework_notes=work_order.rework_notes or '',
+                scanned_components=data.get('scannedComponents', []),
+                reworked_components=data.get('reworked_components', []),
+                previous_components=data.get('previous_components', [])
+            )
+            
+            # Complete one unit of the work order (this updates completed_quantity and status)
+            unit_completed = work_order.complete_unit()
+            
+            if not unit_completed:
+                return JsonResponse({'error': 'Failed to complete unit'}, status=500)
+            
+            # Refresh the work order to get updated values
+            work_order.refresh_from_db()
+            
+            # Create comprehensive log entry
+            create_assembly_log(
+                assembly_id=assembly.id,
+                action='WORK_ORDER_UNIT_COMPLETED',
+                details={
+                    'work_order_id': work_order_id,
+                    'unit_number': work_order.completed_quantity,
+                    'total_units': work_order.quantity,
+                    'remaining_units': work_order.remaining_quantity,
+                    'work_order_status': work_order.status,
+                    'work_order_barcode': data.get('workOrderBarcodeNumber'),
+                    'assembly_barcode': data.get('assemblyBarcodeNumber'),
+                    'component_count': len(data.get('scannedComponents', [])),
+                    'completion_time': data.get('completedAt'),
+                    'operator': data.get('completedBy'),
+                    'is_fully_completed': work_order.is_fully_completed
+                },
+                operator=data.get('completedBy', 'System')
+            )
+            
+            # Return completion status with quantity information
+            response_data = {
+                'id': assembly.id,
+                'serial_number': assembly.serial_number,
+                'barcode_number': assembly.barcode_number,
+                'work_order_id': work_order_id,
+                'completed_quantity': work_order.completed_quantity,
+                'total_quantity': work_order.quantity,
+                'remaining_quantity': work_order.remaining_quantity,
+                'completion_percentage': work_order.completion_percentage,
+                'work_order_status': work_order.status,
+                'is_fully_completed': work_order.is_fully_completed,
+                'status': 'success',
+                'message': f'Unit {work_order.completed_quantity} of {work_order.quantity} completed successfully'
+            }
+            
+            # If work order is fully completed, add additional info
+            if work_order.is_fully_completed:
+                response_data['message'] = f'Work order fully completed! All {work_order.quantity} units finished.'
+                response_data['next_action'] = 'work_order_completed'
+            else:
+                response_data['message'] = f'Unit completed. {work_order.remaining_quantity} units remaining.'
+                response_data['next_action'] = 'continue_next_unit'
+            
+            return JsonResponse(response_data, status=201)
+            
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+# Utility functions for barcode generation and logging
 def generate_work_order_barcode():
     """Generate consistent work order barcode"""
     import random
@@ -617,34 +835,30 @@ def generate_work_order_barcode():
     suffix = str(random.randint(10000, 99999))
     return f"{prefix}24{suffix}"  # Format: XXXX24XXXXX
 
-def generate_assembly_barcode(pcb_type):
+def generate_assembly_barcode(pcb_type='YBS'):
     """Generate assembly barcode based on PCB type"""
-    from django.utils import timezone
-    date = timezone.now()
+    import random
+    from datetime import datetime
+    
+    date = datetime.now()
     year = str(date.year)[2:]
     month = str(date.month).zfill(2)
     day = str(date.day).zfill(2)
+    sequential = str(random.randint(1000, 9999))
     
-    # Generate sequential number (in real app, get from DB)
-    import random
-    sequential = str(random.randint(1, 9999)).zfill(4)
-    
-    if pcb_type == 'YBS':
-        return f"5YB-{year}{month}{day}-{sequential}"
-    elif pcb_type == 'RSM':
-        return f"5RS-{year}{month}{day}-{sequential}"
-    else:
-        return f"5PC-{year}{month}{day}-{sequential}"
+    prefix = '5RS' if pcb_type == 'RSM' else '5YB'
+    return f"{prefix}-{year}{month}{day}-{sequential}"
 
-def create_assembly_log(assembly_id, action, details, operator):
-    """Create comprehensive assembly operation log"""
+def create_assembly_log(assembly_id, action, details, operator='System'):
+    """Create comprehensive assembly log entry"""
     try:
-        AssemblyOperationLog.objects.create(
+        log_entry = AssemblyOperationLog.objects.create(
             assembly_id=str(assembly_id),
             action=action,
-            details=details if isinstance(details, dict) else {'message': str(details)},
-            operator=operator,
-            timestamp=timezone.now()
+            details=details,
+            operator=operator
         )
+        return log_entry
     except Exception as e:
         print(f"Failed to create assembly log: {e}")
+        return None

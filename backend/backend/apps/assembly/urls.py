@@ -17,4 +17,6 @@ urlpatterns = [
     path('enhanced-rework-order/', views.create_enhanced_rework_order, name='create_enhanced_rework_order'),
     path('update-component-barcode/', views.update_component_barcode, name='update_component_barcode'),
     path('assembly-logs/', views.get_assembly_logs, name='get_assembly_logs'),
+    # Multi-quantity work order completion
+    path('complete-work-order-unit/', views.complete_work_order_unit, name='complete_work_order_unit'),
 ]

@@ -57,15 +57,21 @@ const RSMAssemblyView = ({ workOrder }) => {
     iframe.style.height = '100vh';
     iframe.style.border = 'none';
     iframe.style.overflow = 'auto';
-    iframeRef.current = iframe;
-    
-    // First, try to load the specific item code HTML file
+    iframeRef.current = iframe;    // First, try to load the specific item code HTML file
     // Use the normalized item code
     const specificUrl = `/src/pages/RSM/${itemCode}.html?id=${assemblyId || ''}&workOrderId=${workOrderId || ''}`;
     const defaultUrl = `/src/pages/RSM/default.html?id=${assemblyId || ''}&workOrderId=${workOrderId || ''}&itemCode=${itemCode}`;
     
     // Set the source URL with appropriate path and parameters
     iframe.src = specificUrl;
+    
+    console.log('RSMAssemblyView loading:', {
+      itemCode,
+      assemblyId,
+      workOrderId,
+      specificUrl,
+      defaultUrl
+    });
     
     // Add load and error handlers
     iframe.onload = () => {
@@ -205,12 +211,10 @@ const RSMAssemblyViewWithAuth = () => {
   
   // Normalize the item code by removing any "RSM-" prefix
   const itemCode = rawItemCode ? rawItemCode.replace(/^RSM-/, '') : '';
-
   return (
     <WorkOrderAuth
       workOrderId={workOrderId}
       pcbType="RSM"
-      pcbItemCode={itemCode}
       redirectPath="/assembly/rsm"
     >
       <RSMAssemblyView />

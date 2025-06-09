@@ -46,16 +46,20 @@ const YBSAssemblyManager = () => {
       }
     }
   }, [itemCode, pcbItems]);
-
   const fetchPCBItems = async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/api/pcb-items/?category=YBS');
       console.log('Fetched PCB items:', response.data);
-      setPcbItems(response.data);
+      
+      // Ensure we always have an array, even if API returns undefined/null
+      const items = Array.isArray(response.data) ? response.data : [];
+      setPcbItems(items);
     } catch (error) {
       console.error('Error fetching PCB items:', error);
       toast.error('Failed to load PCB items');
+      // Set empty array on error to prevent map() errors
+      setPcbItems([]);
     } finally {
       setLoading(false);
     }
@@ -166,33 +170,40 @@ const YBSAssemblyManager = () => {
     <div className="container mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">YBS Assembly Manager</h1>
       <p className="mb-6">Select a PCB item to view its assembly instructions:</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {pcbItems.map(item => (
-          <div 
-            key={item.item_code}
-            className="bg-white dark:bg-gray-800 p-4 rounded shadow cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => handleItemSelect(item)}
-          >
-            <h3 className="text-lg font-semibold">{item.item_code}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{item.name}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded">
-                {item.category}
-              </span>
-              {item.spindle_count && (
-                <span className="inline-block bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-1 rounded">
-                  {item.spindle_count} spindles
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.isArray(pcbItems) && pcbItems.length > 0 ? (
+          pcbItems.map(item => (
+            <div 
+              key={item.item_code}
+              className="bg-white dark:bg-gray-800 p-4 rounded shadow cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => handleItemSelect(item)}
+            >
+              <h3 className="text-lg font-semibold">{item.item_code}</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{item.name}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded">
+                  {item.category}
                 </span>
-              )}
-              {item.pitch && (
-                <span className="inline-block bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs px-2 py-1 rounded">
-                  {item.pitch}
-                </span>
-              )}
+                {item.spindle_count && (
+                  <span className="inline-block bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-1 rounded">
+                    {item.spindle_count} spindles
+                  </span>
+                )}
+                {item.pitch && (
+                  <span className="inline-block bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs px-2 py-1 rounded">
+                    {item.pitch}
+                  </span>
+                )}
+              </div>
             </div>
+          ))
+        ) : (
+          <div className="col-span-full text-center py-8">
+            <p className="text-gray-500">
+              {loading ? 'Loading PCB items...' : 'No PCB items found'}
+            </p>
           </div>
-        ))}
+        )}
       </div>
       
       {pcbItems.length === 0 && (

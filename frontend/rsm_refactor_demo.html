@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSM Assembly System - Refactored Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .demo-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        .info-panel {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 4px solid #28a745;
+        }
+        .warning-panel {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            border: 1px solid #dee2e6;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="header">
+            <h1>🚀 RSM Assembly System - Refactored</h1>
+            <p>Backend Logic Separation Demo</p>
+        </div>
+
+        <div class="info-panel">
+            <h3>✅ Refactoring Complete</h3>
+            <p>The RSM assembly system has been successfully refactored with the following improvements:</p>
+            <ul>
+                <li><strong>rsm_backend.js</strong> - Contains all backend operations (completion, storage, quantity management)</li>
+                <li><strong>rsm.js</strong> - Refactored frontend logic that uses the backend manager</li>
+                <li><strong>Rework Support</strong> - Built-in rework scenario handling</li>
+                <li><strong>Fallback Mode</strong> - Works even if backend manager is unavailable</li>
+            </ul>
+        </div>
+
+        <div class="warning-panel">
+            <h3>⚠️ Integration Notes</h3>
+            <p>To use the refactored system, include both scripts in your HTML pages:</p>
+            <div class="code-block">
+&lt;!-- Load backend manager first --&gt;
+&lt;script src="src/js/rsm_backend.js">&lt;/script&gt;
+&lt;!-- Then load main RSM script --&gt;
+&lt;script src="src/js/rsm.js">&lt;/script&gt;
+            </div>
+        </div>
+
+        <h3>🧪 System Tests</h3>
+        <div id="testResults"></div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <button onclick="runTests()">Run Backend Tests</button>
+            <button onclick="testBackendAvailability()">Test Backend Availability</button>
+            <button onclick="simulateCompletion()">Simulate Assembly Completion</button>
+            <button onclick="testReworkScenario()">Test Rework Scenario</button>
+        </div>
+
+        <h3>📋 Backend Operations Moved</h3>
+        <div class="info-panel">
+            <h4>Methods moved to RSMBackendManager:</h4>
+            <ul>
+                <li><code>completeAssembly()</code> - Main assembly completion logic</li>
+                <li><code>updateAssemblyStatus()</code> - Database status updates</li>
+                <li><code>handleWorkOrderCompletion()</code> - Quantity management</li>
+                <li><code>storeCompletedAssembly()</code> - Data storage operations</li>
+                <li><code>moveWorkOrderToCompleted()</code> - Status transitions</li>
+                <li><code>logAssemblyAction()</code> - Action logging</li>
+                <li><code>handleRework()</code> - Rework scenario management</li>
+                <li><code>generateAssemblyBarcode()</code> - Barcode generation</li>
+            </ul>
+        </div>
+
+        <h3>🔄 Rework Features</h3>
+        <div class="info-panel">
+            <p>The new backend manager includes comprehensive rework handling:</p>
+            <ul>
+                <li>Move completed assemblies back to pending with rework tag</li>
+                <li>Track rework reasons and count</li>
+                <li>Maintain audit trail of rework operations</li>
+                <li>API integration for centralized rework tracking</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Load backend manager first -->
+    <script src="src/js/rsm_backend.js"></script>
+    
+    <script>
+        let testResults = document.getElementById('testResults');
+        
+        function addTestResult(message, isSuccess) {
+            const div = document.createElement('div');
+            div.className = `test-result ${isSuccess ? 'success' : 'error'}`;
+            div.innerHTML = `${isSuccess ? '✅' : '❌'} ${message}`;
+            testResults.appendChild(div);
+        }
+        
+        function runTests() {
+            testResults.innerHTML = '<h4>Running Tests...</h4>';
+            
+            // Test 1: Backend Manager Availability
+            try {
+                if (typeof RSMBackendManager !== 'undefined') {
+                    addTestResult('RSMBackendManager class is available', true);
+                    
+                    // Test 2: Backend Manager Instantiation
+                    const backend = new RSMBackendManager('/api');
+                    addTestResult('Backend manager can be instantiated', true);
+                    
+                    // Test 3: Method Availability
+                    const requiredMethods = [
+                        'completeAssembly', 'handleRework', 'logAssemblyAction',
+                        'storeCompletedAssembly', 'generateAssemblyBarcode'
+                    ];
+                    
+                    let methodsOk = true;
+                    requiredMethods.forEach(method => {
+                        if (typeof backend[method] === 'function') {
+                            addTestResult(`Method ${method}() is available`, true);
+                        } else {
+                            addTestResult(`Method ${method}() is missing`, false);
+                            methodsOk = false;
+                        }
+                    });
+                    
+                    if (methodsOk) {
+                        addTestResult('All required backend methods are available', true);
+                    }
+                    
+                } else {
+                    addTestResult('RSMBackendManager class is not available', false);
+                }
+            } catch (error) {
+                addTestResult(`Test error: ${error.message}`, false);
+            }
+        }
+        
+        function testBackendAvailability() {
+            testResults.innerHTML = '<h4>Testing Backend Availability...</h4>';
+            
+            try {
+                if (typeof RSMBackendManager !== 'undefined') {
+                    const backend = new RSMBackendManager('/api');
+                    
+                    // Test API connection
+                    backend.testApiConnection().then(connected => {
+                        addTestResult(`API connection test: ${connected ? 'Connected' : 'Not connected'}`, connected);
+                    }).catch(error => {
+                        addTestResult(`API connection error: ${error.message}`, false);
+                    });
+                    
+                    // Test session ID generation
+                    const sessionId = backend.getSessionId();
+                    addTestResult(`Session ID generated: ${sessionId}`, !!sessionId);
+                    
+                } else {
+                    addTestResult('Backend manager not available for testing', false);
+                }
+            } catch (error) {
+                addTestResult(`Backend availability test error: ${error.message}`, false);
+            }
+        }
+        
+        function simulateCompletion() {
+            testResults.innerHTML = '<h4>Simulating Assembly Completion...</h4>';
+            
+            try {
+                if (typeof RSMBackendManager !== 'undefined') {
+                    const backend = new RSMBackendManager('/api');
+                    
+                    // Create mock assembly data
+                    const mockAssemblyData = {
+                        assemblyId: 'TEST-001',
+                        currentRSMType: '5RS011027',
+                        workOrderId: 'WO-TEST-001',
+                        config: { name: 'Test RSM Assembly' },
+                        componentMapping: {
+                            'comp1': { scanned: true, name: 'Test Component 1', itemCode: 'TC001', scannedBarcode: 'BC001', sequence: 1 },
+                            'comp2': { scanned: true, name: 'Test Component 2', itemCode: 'TC002', scannedBarcode: 'BC002', sequence: 2 }
+                        }
+                    };
+                    
+                    backend.completeAssembly(mockAssemblyData).then(result => {
+                        if (result.success) {
+                            addTestResult(`Assembly completion simulation successful: ${result.message}`, true);
+                            addTestResult(`Generated barcode: ${result.assemblyBarcode}`, true);
+                        } else {
+                            addTestResult(`Assembly completion simulation failed: ${result.message}`, false);
+                        }
+                    }).catch(error => {
+                        addTestResult(`Completion simulation error: ${error.message}`, false);
+                    });
+                    
+                } else {
+                    addTestResult('Backend manager not available for completion simulation', false);
+                }
+            } catch (error) {
+                addTestResult(`Completion simulation error: ${error.message}`, false);
+            }
+        }
+        
+        function testReworkScenario() {
+            testResults.innerHTML = '<h4>Testing Rework Scenario...</h4>';
+            
+            try {
+                if (typeof RSMBackendManager !== 'undefined') {
+                    const backend = new RSMBackendManager('/api');
+                    
+                    // Simulate rework
+                    backend.handleRework('TEST-001', 'Quality control issue').then(result => {
+                        if (result.success) {
+                            addTestResult(`Rework scenario test successful: ${result.message}`, true);
+                        } else {
+                            addTestResult(`Rework scenario test failed: ${result.message}`, false);
+                        }
+                    }).catch(error => {
+                        addTestResult(`Rework test error: ${error.message}`, false);
+                    });
+                    
+                } else {
+                    addTestResult('Backend manager not available for rework testing', false);
+                }
+            } catch (error) {
+                addTestResult(`Rework test error: ${error.message}`, false);
+            }
+        }
+        
+        // Auto-run initial tests when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(runTests, 1000);
+        });
+    </script>
+</body>
+</html>

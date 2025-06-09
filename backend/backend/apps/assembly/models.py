@@ -21,6 +21,8 @@ class AssemblyProcess(models.Model):
     created_by = models.CharField(max_length=100)
     notes = models.TextField(blank=True, null=True)
     current_sensor_index = models.IntegerField(default=1)  # Track the current sensor being scanned
+    barcode_number = models.CharField(max_length=100, blank=True, null=True)  # Generated assembly barcode
+    metadata = models.JSONField(default=dict, blank=True)  # Store complex metadata as JSON
     
     class Meta:
         verbose_name = "Assembly Process"

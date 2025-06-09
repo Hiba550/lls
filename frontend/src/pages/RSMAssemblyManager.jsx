@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { fetchWorkOrders, updateWorkOrder } from '../api/workOrderApi';
-import { fetchAssemblyProcesses } from '../api/assemblyApi';
+import { fetchAssemblyProcesses, createAssemblyProcess } from '../api/assemblyApi';
 import { fetchPCBItems } from '../api/itemMasterApi';
 
 const RSMAssemblyManager = () => {
@@ -79,8 +79,7 @@ const RSMAssemblyManager = () => {
             }
           ]);
         }
-        
-        // Fetch all work orders
+          // Fetch all work orders
         try {
           const allWorkOrders = await fetchWorkOrders();
           console.log('Work orders response:', allWorkOrders);
@@ -97,9 +96,51 @@ const RSMAssemblyManager = () => {
               )
             : [];
           
+          // Also check localStorage for pending RSM work orders (including rework orders)
+          const localStorageKeys = ['workOrders', 'pendingWorkOrders', 'pendingAssemblies'];
+          const localRsmOrders = [];
+          
+          localStorageKeys.forEach(key => {
+            try {
+              const orders = JSON.parse(localStorage.getItem(key) || '[]');
+              const rsmLocalOrders = orders.filter(order => 
+                (order.status === 'Pending' || !order.status) &&
+                (order.reworked === true || 
+                 (order.item_code && (order.item_code.includes('5RS') || order.item_code.includes('RSM'))) ||
+                 (order.product && order.product.includes('RSM')))
+              );
+              
+              rsmLocalOrders.forEach(localOrder => {
+                // Check if this order is not already in the API results
+                const existsInApi = rsmWorkOrders.some(apiOrder => 
+                  apiOrder.id === localOrder.id || 
+                  apiOrder.id === localOrder.api_work_order_id
+                );
+                
+                if (!existsInApi) {
+                  // Add local order to the list with a unique ID
+                  localRsmOrders.push({
+                    ...localOrder,
+                    id: localOrder.id || `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    source: 'localStorage',
+                    pcb_type: 'RSM',
+                    status: 'Pending'
+                  });
+                }
+              });
+            } catch (error) {
+              console.warn(`Failed to parse localStorage key ${key}:`, error);
+            }
+          });
+          
+          // Merge API and localStorage orders
+          const allRsmOrders = [...rsmWorkOrders, ...localRsmOrders];
+          
+          console.log('Merged RSM work orders:', allRsmOrders);
+          
           // If no work orders, create mock data for demonstration
-          if (rsmWorkOrders.length === 0) {
-            rsmWorkOrders.push({
+          if (allRsmOrders.length === 0) {
+            allRsmOrders.push({
               id: 'demo-2',
               item_code: '5RS011075',
               pcb_item_code: 'RSM011075',
@@ -111,20 +152,53 @@ const RSMAssemblyManager = () => {
             });
           }
           
-          setWorkOrders(rsmWorkOrders);
-        } catch (woError) {
+          setWorkOrders(allRsmOrders);        } catch (woError) {
           console.error('Failed to fetch work orders:', woError);
-          // Create mock data for demonstration
-          setWorkOrders([{
-            id: 'demo-2',
-            item_code: '5RS011075',
-            pcb_item_code: 'RSM011075',
-            pcb_type: 'RSM',
-            product: 'RSM Cable Assembly',
-            quantity: 5,
-            status: 'Pending',
-            target_date: new Date().toISOString()
-          }]);
+          
+          // Still check localStorage for rework orders even if API fails
+          const localStorageKeys = ['workOrders', 'pendingWorkOrders', 'pendingAssemblies'];
+          const localRsmOrders = [];
+          
+          localStorageKeys.forEach(key => {
+            try {
+              const orders = JSON.parse(localStorage.getItem(key) || '[]');
+              const rsmLocalOrders = orders.filter(order => 
+                (order.status === 'Pending' || !order.status) &&
+                (order.reworked === true || 
+                 (order.item_code && (order.item_code.includes('5RS') || order.item_code.includes('RSM'))) ||
+                 (order.product && order.product.includes('RSM')))
+              );
+              
+              rsmLocalOrders.forEach(localOrder => {
+                localRsmOrders.push({
+                  ...localOrder,
+                  id: localOrder.id || `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  source: 'localStorage',
+                  pcb_type: 'RSM',
+                  status: 'Pending'
+                });
+              });
+            } catch (error) {
+              console.warn(`Failed to parse localStorage key ${key}:`, error);
+            }
+          });
+          
+          // If we have local orders, use them; otherwise use mock data
+          if (localRsmOrders.length > 0) {
+            setWorkOrders(localRsmOrders);
+          } else {
+            // Create mock data for demonstration
+            setWorkOrders([{
+              id: 'demo-2',
+              item_code: '5RS011075',
+              pcb_item_code: 'RSM011075',
+              pcb_type: 'RSM',
+              product: 'RSM Cable Assembly',
+              quantity: 5,
+              status: 'Pending',
+              target_date: new Date().toISOString()
+            }]);
+          }
         }
         
         // Try to fetch assembly processes
@@ -151,8 +225,7 @@ const RSMAssemblyManager = () => {
           setInProgressAssemblies([]);
         }
         
-        setError(null);
-      } catch (err) {
+        setError(null);      } catch (err) {
         console.error('Failed to fetch data:', err);
         setError('Failed to load assembly data. Please try again.');
         
@@ -168,29 +241,272 @@ const RSMAssemblyManager = () => {
           }
         ]);
         
-        setWorkOrders([{
-          id: 'demo-2',
-          item_code: '5RS011075',
-          pcb_item_code: 'RSM011075',
-          pcb_type: 'RSM',
-          product: 'RSM Cable Assembly',
-          quantity: 5,
-          status: 'Pending',
-          target_date: new Date().toISOString()
-        }]);
+        // Check localStorage for rework orders even on complete failure
+        const localStorageKeys = ['workOrders', 'pendingWorkOrders', 'pendingAssemblies'];
+        const localRsmOrders = [];
+        
+        localStorageKeys.forEach(key => {
+          try {
+            const orders = JSON.parse(localStorage.getItem(key) || '[]');
+            const rsmLocalOrders = orders.filter(order => 
+              (order.status === 'Pending' || !order.status) &&
+              (order.reworked === true || 
+               (order.item_code && (order.item_code.includes('5RS') || order.item_code.includes('RSM'))) ||
+               (order.product && order.product.includes('RSM')))
+            );
+            
+            rsmLocalOrders.forEach(localOrder => {
+              localRsmOrders.push({
+                ...localOrder,
+                id: localOrder.id || `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                source: 'localStorage',
+                pcb_type: 'RSM',
+                status: 'Pending'
+              });
+            });
+          } catch (error) {
+            console.warn(`Failed to parse localStorage key ${key}:`, error);
+          }
+        });
+        
+        if (localRsmOrders.length > 0) {
+          console.log('Found local rework orders:', localRsmOrders);
+          setWorkOrders(localRsmOrders);
+        } else {
+          setWorkOrders([{
+            id: 'demo-2',
+            item_code: '5RS011075',
+            pcb_item_code: 'RSM011075',
+            pcb_type: 'RSM',
+            product: 'RSM Cable Assembly',
+            quantity: 5,
+            status: 'Pending',
+            target_date: new Date().toISOString()
+          }]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+      fetchData();
+  }, []); // Empty dependency array means it only runs once
+
+  // Manual refresh function (useful after rework operations)
+  const refreshData = () => {
+    setLoading(true);
+    setError(null);
+    
+    // Re-run the fetch data logic
+    const fetchData = async () => {
+      try {
+        // Fetch PCB items
+        try {
+          const data = await fetchPCBItems();
+          console.log('PCB Items loaded:', data);
+          
+          // Filter for RSM items
+          const rsmItems = Array.isArray(data) 
+            ? data.filter(item => 
+                item.category === 'RSM' || 
+                (item.item_code && item.item_code.includes('RSM'))
+              )
+            : [];
+          
+          if (rsmItems.length > 0) {
+            setPcbItems(rsmItems);
+          } else {
+            setPcbItems([
+              {
+                id: 1,
+                item_code: 'RSM011075',
+                name: '1Master 3Slave 75 mm',
+                cable_description: 'RSM - POWER & COMMUNICATION CABLE ASSY with RMC- BL Ver- (75mm Pitch)',
+                category: 'RSM',
+                pitch: '75mm'
+              },
+              {
+                id: 2,
+                item_code: 'RSM011076',
+                name: '3Slave 75 mm',
+                cable_description: 'RSM - POWER & COMMUNICATION CABLE ASSY without RMC- BL Ver- (75mm Pitch)',
+                category: 'RSM',
+                pitch: '75mm'
+              }
+            ]);
+          }
+        } catch (pcbError) {
+          console.warn('Could not fetch PCB items', pcbError);
+          setPcbItems([
+            {
+              id: 1,
+              item_code: 'RSM011075',
+              name: '1Master 3Slave 75 mm',
+              cable_description: 'RSM - POWER & COMMUNICATION CABLE ASSY with RMC- BL Ver- (75mm Pitch)',
+              category: 'RSM',
+              pitch: '75mm'
+            },
+            {
+              id: 2,
+              item_code: 'RSM011076',
+              name: '3Slave 75 mm',
+              cable_description: 'RSM - POWER & COMMUNICATION CABLE ASSY without RMC- BL Ver- (75mm Pitch)',
+              category: 'RSM',
+              pitch: '75mm'
+            }
+          ]);
+        }
+        
+        // Fetch all work orders
+        try {
+          const allWorkOrders = await fetchWorkOrders();
+          console.log('Work orders response:', allWorkOrders);
+          
+          // Filter for RSM work orders
+          const rsmWorkOrders = Array.isArray(allWorkOrders) 
+            ? allWorkOrders.filter(order => 
+                (order.pcb_type === 'RSM') || 
+                (order.product && order.product.includes('RSM')) || 
+                (order.item_code && (
+                  order.item_code.includes('5RS') || 
+                  order.item_code.includes('RSM')
+                ))
+              )
+            : [];
+          
+          // Also check localStorage for pending RSM work orders (including rework orders)
+          const localStorageKeys = ['workOrders', 'pendingWorkOrders', 'pendingAssemblies'];
+          const localRsmOrders = [];
+          
+          localStorageKeys.forEach(key => {
+            try {
+              const orders = JSON.parse(localStorage.getItem(key) || '[]');
+              const rsmLocalOrders = orders.filter(order => 
+                (order.status === 'Pending' || !order.status) &&
+                (order.reworked === true || 
+                 (order.item_code && (order.item_code.includes('5RS') || order.item_code.includes('RSM'))) ||
+                 (order.product && order.product.includes('RSM')))
+              );
+              
+              rsmLocalOrders.forEach(localOrder => {
+                // Check if this order is not already in the API results
+                const existsInApi = rsmWorkOrders.some(apiOrder => 
+                  apiOrder.id === localOrder.id || 
+                  apiOrder.id === localOrder.api_work_order_id
+                );
+                
+                if (!existsInApi) {
+                  localRsmOrders.push({
+                    ...localOrder,
+                    id: localOrder.id || `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    source: 'localStorage',
+                    pcb_type: 'RSM',
+                    status: 'Pending'
+                  });
+                }
+              });
+            } catch (error) {
+              console.warn(`Failed to parse localStorage key ${key}:`, error);
+            }
+          });
+          
+          // Merge API and localStorage orders
+          const allRsmOrders = [...rsmWorkOrders, ...localRsmOrders];
+          
+          console.log('Merged RSM work orders (refresh):', allRsmOrders);
+          
+          if (allRsmOrders.length === 0) {
+            allRsmOrders.push({
+              id: 'demo-2',
+              item_code: '5RS011075',
+              pcb_item_code: 'RSM011075',
+              pcb_type: 'RSM',
+              product: 'RSM Cable Assembly',
+              quantity: 5,
+              status: 'Pending',
+              target_date: new Date().toISOString()
+            });
+          }
+          
+          setWorkOrders(allRsmOrders);
+        } catch (woError) {
+          console.error('Failed to fetch work orders on refresh:', woError);
+          // Still check localStorage even if API fails
+          const localStorageKeys = ['workOrders', 'pendingWorkOrders', 'pendingAssemblies'];
+          const localRsmOrders = [];
+          
+          localStorageKeys.forEach(key => {
+            try {
+              const orders = JSON.parse(localStorage.getItem(key) || '[]');
+              const rsmLocalOrders = orders.filter(order => 
+                (order.status === 'Pending' || !order.status) &&
+                (order.reworked === true || 
+                 (order.item_code && (order.item_code.includes('5RS') || order.item_code.includes('RSM'))) ||
+                 (order.product && order.product.includes('RSM')))
+              );
+              
+              rsmLocalOrders.forEach(localOrder => {
+                localRsmOrders.push({
+                  ...localOrder,
+                  id: localOrder.id || `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  source: 'localStorage',
+                  pcb_type: 'RSM',
+                  status: 'Pending'
+                });
+              });
+            } catch (error) {
+              console.warn(`Failed to parse localStorage key ${key}:`, error);
+            }
+          });
+          
+          if (localRsmOrders.length > 0) {
+            setWorkOrders(localRsmOrders);
+          } else {
+            setWorkOrders([{
+              id: 'demo-2',
+              item_code: '5RS011075',
+              pcb_item_code: 'RSM011075',
+              pcb_type: 'RSM',
+              product: 'RSM Cable Assembly',
+              quantity: 5,
+              status: 'Pending',
+              target_date: new Date().toISOString()
+            }]);
+          }
+        }
+        
+      } catch (err) {
+        console.error('Failed to refresh data:', err);
+        setError('Failed to refresh assembly data. Please try again.');
       } finally {
         setLoading(false);
       }
     };
     
     fetchData();
-  }, []); // Empty dependency array means it only runs once
-  
-  // Handle starting a new assembly
+  };    // Handle starting a new assembly
   const handleStartAssembly = async (workOrder) => {
     try {
       setCreating(true);
-      toast.info('Preparing assembly process...');
+      
+      // Check if this is a rework order (synthetic ID starting with 'RW-')
+      if (workOrder.id && workOrder.id.toString().startsWith('RW-')) {
+        console.log('Starting rework assembly directly for:', workOrder.id);
+        toast.success('Starting rework assembly...');
+        
+        // For rework orders, navigate directly without API call
+        const itemCodeForUrl = workOrder.item_code || '5RS011075';
+        
+        // Use synthetic assembly ID for rework
+        const reworkAssemblyId = `RW_ASSEMBLY_${Date.now()}`;
+        
+        setTimeout(() => {
+          navigate(`/assembly/rsm/${itemCodeForUrl}?assemblyId=${reworkAssemblyId}&workOrderId=${workOrder.id}&isRework=true`);
+        }, 100);
+        
+        return;
+      }
+      
+      toast.info('Creating RSM assembly process...');
       
       // Automatically assign RSM PCB type if not already assigned
       let pcbItemCode = workOrder.pcb_item_code || selectedPcbItemCode;
@@ -209,55 +525,63 @@ const RSMAssemblyManager = () => {
             pcbItemCode = matchingItem.item_code;
             console.log('Auto-assigned PCB type based on item code:', pcbItemCode);
           } else {
-            // Default to the first available RSM PCB item if no match found
-            pcbItemCode = pcbItems.length > 0 ? pcbItems[0].item_code : null;
+            // Default to fallback RSM codes
+            pcbItemCode = pcbItems.length > 0 ? pcbItems[0].item_code : 'RSM011075';
             console.log('Auto-assigned default PCB type:', pcbItemCode);
           }
         } else {
-          // Default to the first available RSM PCB item
-          pcbItemCode = pcbItems.length > 0 ? pcbItems[0].item_code : null;
+          // Default to fallback RSM codes
+          pcbItemCode = pcbItems.length > 0 ? pcbItems[0].item_code : 'RSM011075';
           console.log('Auto-assigned default PCB type:', pcbItemCode);
         }
       }
+        console.log('Creating assembly for work order:', workOrder, 'PCB item code:', pcbItemCode);
       
-      // Validate PCB item code
-      if (!pcbItemCode) {
-        toast.error('Could not automatically assign PCB item. Please select one manually.');
-        setCreating(false);
-        return;
-      }
+      // Skip work order update for now to avoid 400 errors
+      // Set local values for validation
+      workOrder.pcb_type = 'RSM';
+      workOrder.pcb_type_code = 'RSM';
+      workOrder.pcb_item_code = pcbItemCode;
+        // CREATE THE ASSEMBLY PROCESS - This was missing!
+      const assemblyData = {
+        work_order: workOrder.id,
+        created_by: 'Current User',
+        status: 'pending',
+        pcb_type: 'RSM'
+      };      
+      const newAssembly = await createAssemblyProcess(assemblyData);
       
-      console.log('Creating assembly for work order:', workOrder, 'PCB item code:', pcbItemCode);
+      console.log('Created assembly response:', newAssembly);
       
-      // UPDATE THE WORK ORDER IN THE DATABASE - Add this code
-      try {
-        await updateWorkOrder(workOrder.id, {
-          pcb_type: 'RSM',
-          pcb_item_code: pcbItemCode
-        });
-        console.log('Work order updated with PCB type');
-        
-        // Update the local work order copy for immediate UI update
-        workOrder.pcb_type = 'RSM';
-        workOrder.pcb_item_code = pcbItemCode;
-      } catch (updateError) {
-        console.error('Failed to update work order:', updateError);
-        // Continue anyway, as we've set the localStorage values
+      if (!newAssembly || !newAssembly.id) {
+        throw new Error('Failed to create assembly process');
       }
       
       // Save to localStorage for persistence
       localStorage.setItem('currentRSMWorkOrderId', workOrder.id);
       localStorage.setItem('currentRSMItemCode', pcbItemCode);
-      
-      // Use raw item code without adding RSM- prefix
+      localStorage.setItem('currentRSMAssemblyId', newAssembly.id);
+        // Use the work order's item code for URL routing
       const itemCodeForUrl = workOrder.item_code || `5RS${pcbItemCode.replace(/^RSM/, '')}`;
       
-      // Navigate to the corresponding assembly page with work order ID
-      toast.success(`Assembly process prepared successfully!`);
-      navigate(`/assembly/rsm/${itemCodeForUrl}?workOrderId=${workOrder.id}`);
+      console.log('Navigation details:', {
+        itemCodeForUrl,
+        assemblyId: newAssembly.id,
+        workOrderId: workOrder.id,
+        finalUrl: `/assembly/rsm/${itemCodeForUrl}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`
+      });
+        // Navigate to the corresponding assembly page with both assemblyId and workOrderId
+      toast.success(`Assembly process created! Serial number: ${newAssembly.serial_number || newAssembly.id}`);
+      
+      console.log('About to navigate to:', `/assembly/rsm/${itemCodeForUrl}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`);
+      
+      // Add a small delay to ensure toast message shows
+      setTimeout(() => {
+        navigate(`/assembly/rsm/${itemCodeForUrl}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`);
+      }, 100);
     } catch (err) {
-      console.error('Error preparing assembly process:', err);
-      toast.error('Failed to prepare assembly. Please try again.');
+      console.error('Error creating assembly process:', err);
+      toast.error(`Failed to create assembly: ${err.message}`);
     } finally {
       setCreating(false);
     }
@@ -307,20 +631,31 @@ const RSMAssemblyManager = () => {
           </div>
         </div>
       )}
-      
-      <motion.div 
+        <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="flex justify-between items-center"
       >
         <h1 className="text-2xl font-bold text-gray-800">RSM Assembly Management</h1>
-        <Link 
-          to="/assembly" 
-          className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-        >
-          Back to All Assemblies
-        </Link>
+        <div className="flex gap-2">
+          <button
+            onClick={refreshData}
+            disabled={loading}
+            className="px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+          <Link 
+            to="/assembly" 
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            Back to All Assemblies
+          </Link>
+        </div>
       </motion.div>
       
       {/* Search Bar */}

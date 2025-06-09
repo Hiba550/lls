@@ -326,7 +326,6 @@ def process_inventory_data(data_text):
                 'description': fields[4].strip(),
                 'uom': fields[6].strip() if len(fields) > 6 else 'Nos',
                 'code': fields[7].strip() if len(fields) > 7 else None,
-                'quantity': 0,
             }
             items.append(item_data)
         except ValueError as ve:
@@ -353,9 +352,7 @@ def import_inventory_to_db(items):
             item_code = item['item_code']
             try:
                 existing_item = ItemMaster.objects.get(item_code=item_code)
-                existing_item.quantity = 0
-                existing_item.save()
-                logging.info(f"Updated quantity for existing item: {item_code}")
+                logging.info(f"Found existing item: {item_code}")
                 updated_count += 1
             except ItemMaster.DoesNotExist:
                 # Prepare new ItemMaster instance for bulk creation

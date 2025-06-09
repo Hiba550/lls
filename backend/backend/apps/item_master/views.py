@@ -24,6 +24,7 @@ class PCBItemViewSet(viewsets.ModelViewSet):
     ordering_fields = ['item_code', 'category']
     permission_classes = [AllowAny]
     authentication_classes = []
+    pagination_class = None  # Disable pagination to return all results
     
     @action(detail=False, methods=['GET'])
     def by_category(self, request):
@@ -82,13 +83,15 @@ class PCBItemViewSet(viewsets.ModelViewSet):
         })
 
 class ItemMasterViewSet(viewsets.ModelViewSet):
-    queryset = ItemMaster.objects.all()
+    queryset = ItemMaster.objects.all().order_by('item_code')  # Add default ordering
     serializer_class = ItemMasterSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['item_code', 'description', 'product']
     ordering_fields = ['item_code', 'sno', 'product']
+    ordering = ['item_code']  # Default ordering
     permission_classes = [AllowAny]  # Allow unauthenticated access for frontend compatibility
     authentication_classes = []  # No authentication required
+    pagination_class = None  # Disable pagination to return all results
     
     @action(detail=False, methods=['GET'])
     def assembly_items(self, request):
@@ -185,11 +188,14 @@ class ItemMasterViewSet(viewsets.ModelViewSet):
         })
 
 class BOMComponentViewSet(viewsets.ModelViewSet):
-    queryset = BOMComponent.objects.all()
+    queryset = BOMComponent.objects.all().order_by('parent_item__item_code', 'child_item__item_code')
     serializer_class = BOMComponentSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['parent_item__item_code', 'child_item__item_code', 'case_no']
-    permission_classes = [IsAdminUser]  # Only admin users can access
+    ordering = ['parent_item__item_code', 'child_item__item_code']  # Default ordering
+    permission_classes = [AllowAny]  # Allow unauthenticated access for frontend compatibility
+    authentication_classes = []  # No authentication required
+    pagination_class = None  # Disable pagination to return all results
     
     @action(detail=False, methods=['POST'])
     def add_multiple_components(self, request):
@@ -225,77 +231,4 @@ class BOMComponentViewSet(viewsets.ModelViewSet):
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
             return Response(created_components, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-class AssemblyProcessViewSet(viewsets.ModelViewSet):
-    queryset = AssemblyProcess.objects.all()
-    serializer_class = AssemblyProcessSerializer
-    permission_classes = [AllowAny]  # Allow any user to access this viewset
-    authentication_classes = []  # No authentication required
-    
-    @action(detail=True, methods=['POST'])
-    def add_scanned_part(self, request, pk=None):
-        """Add a scanned part to the assembly process"""
-        assembly_process = self.get_object()
-        serializer = ScannedPartSerializer(data={
-            'assembly_process': assembly_process.id,
-            **request.data
-        })
-        
-        if serializer.is_valid():
-            serializer.save()
-            
-            # Create a log entry for this scan
-            AssemblyLog.objects.create(
-                assembly_process=assembly_process,
-                action="Part Scanned",
-                details=f"Part {request.data.get('part_code')} scanned successfully",
-                operator=request.data.get('operator', 'Unknown')
-            )
-            
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=True, methods=['POST'])
-    def replace_part(self, request, pk=None):
-        """Replace a previously scanned part"""
-        try:
-            part = ScannedPart.objects.get(id=request.data.get('part_id'))
-            part.replaced = True
-            part.replaced_with = request.data.get('replaced_with')
-            part.replace_reason = request.data.get('replace_reason')
-            part.replace_time = timezone.now()
-            part.save()
-            
-            # Create a log entry for this replacement
-            AssemblyLog.objects.create(
-                assembly_process=part.assembly_process,
-                action="Part Replaced",
-                details=f"Part {part.part_code} replaced with {request.data.get('replaced_with')}. Reason: {request.data.get('replace_reason')}",
-                operator=request.data.get('operator', 'Unknown')
-            )
-            
-            return Response(ScannedPartSerializer(part).data)
-        except ScannedPart.DoesNotExist:
-            return Response({"error": "Part not found"}, status=status.HTTP_404_NOT_FOUND)
-    
-    @action(detail=True, methods=['POST'])
-    def complete_assembly(self, request, pk=None):
-        """Mark an assembly process as completed"""
-        assembly_process = self.get_object()
-        assembly_process.status = 'completed'
-        assembly_process.completed_at = timezone.now()
-        assembly_process.quantity_completed = request.data.get('quantity_completed', 1)
-        assembly_process.notes = request.data.get('notes', '')
-        assembly_process.save()
-        
-        # Create a log entry for completion
-        AssemblyLog.objects.create(
-            assembly_process=assembly_process,
-            action="Assembly Completed",
-            details=f"Assembly process completed with {assembly_process.quantity_completed} units",
-            operator=request.data.get('operator', 'Unknown')
-        )
-        
-        return Response(AssemblyProcessSerializer(assembly_process).data)
+        except Exception as e:            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

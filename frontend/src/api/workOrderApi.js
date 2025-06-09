@@ -1,115 +1,346 @@
-import axios from 'axios';
+// API functions for work order management (no localStorage dependencies)
 
-// Set the API URL with the correct base
-const API_URL = '/api';
+const API_BASE_URL = '/api';
 
-// Fetch all work orders with the correct endpoint (singular)
-export const fetchWorkOrders = async () => {
-  try {
-    console.log('Fetching work orders from API');
-    const response = await axios.get(`${API_URL}/work-order/`);
-    console.log('Work orders response:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching work orders:', error);
-    
-    // Provide mock data for development
-    return [
-      {
-        id: 1,
-        item_code: '5YB011057',
-        product: 'YBS-2023',
-        quantity: 10,
-        target_date: new Date().toISOString(),
-        customer_name: 'Acme Corp'
-      },
-      {
-        id: 2,
-        item_code: '5YB011113',
-        product: 'RAP-2023',
-        quantity: 5,
-        target_date: new Date().toISOString(),
-        customer_name: 'Globex Industries'
+class WorkOrderAPI {
+  /**
+   * Get all work orders
+   */
+  static async getAllWorkOrders() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    ];
-  }
-};
-
-// Fetch PCB Types for dropdown selection
-export const fetchPCBTypes = async () => {
-  try {
-    const response = await axios.get(`${API_URL}/pcb-types/`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching PCB types:', error);
-    
-    // Provide mock data for development
-    return [
-      { id: 1, code: 'YBS', name: 'Yarn Breaking System', prefix: '5YB', active: true },
-      { id: 2, code: 'RSM', name: 'Roland Sound Module', prefix: '5RS', active: true }
-    ];
-  }
-};
-
-// Fetch a single work order by ID
-export const fetchWorkOrderById = async (id) => {
-  try {
-    // Using axios directly with proper URL
-    const response = await axios.get(`${API_URL}/work-order/${id}/`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error fetching work order with ID ${id}:`, error);
-    throw error;
-  }
-};
-
-// Create a new work order
-export const createWorkOrder = async (data) => {
-  try {
-    console.log('Creating work order with data:', data);
-    const response = await axios.post(`${API_URL}/work-order/`, data);
-    return response.data;
-  } catch (error) {
-    console.error('Error creating work order:', error);
-    
-    // Log more detailed error information
-    if (error.response) {
-      // The server responded with an error status code
-      console.error('Server error response:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      });
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('No response received from server:', error.request);
-    } else {
-      // Something happened in setting up the request
-      console.error('Request setup error:', error.message);
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching work orders:', error);
+      throw error;
     }
-    
-    throw error;
   }
-};
 
-// Update an existing work order
-export const updateWorkOrder = async (id, workOrderData) => {
-  try {
-    const response = await axios.put(`${API_URL}/work-order/${id}/`, workOrderData);
-    return response.data;
-  } catch (error) {
-    console.error('Error updating work order:', error);
-    throw error;
+  /**
+   * Get work orders by PCB type
+   */
+  static async getWorkOrdersByType(pcbType) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/by_pcb_type/?type=${pcbType}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching work orders by type:', error);
+      throw error;
+    }
   }
-};
 
-// Delete a work order
-export const deleteWorkOrder = async (id) => {
-  try {
-    await axios.delete(`${API_URL}/work-order/${id}/`);
-    return true;
-  } catch (error) {
-    console.error(`Error deleting work order with ID ${id}:`, error);
-    throw error;
+  /**
+   * Get pending work orders
+   */
+  static async getPendingWorkOrders() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/?status=Pending`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching pending work orders:', error);
+      throw error;
+    }
   }
-};
+
+  /**
+   * Get completed work orders
+   */
+  static async getCompletedWorkOrders() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/?status=Completed`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching completed work orders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get rework orders
+   */
+  static async getReworkOrders() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/rework_orders/`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching rework orders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific work order by ID
+   */
+  static async getWorkOrder(workOrderId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${workOrderId}/`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching work order:', error);
+      throw error;
+    }  }
+
+  /**
+   * Create a new work order
+   */
+  static async createWorkOrder(workOrderData) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(workOrderData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating work order:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update an existing work order
+   */
+  static async updateWorkOrder(workOrderId, workOrderData) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${workOrderId}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(workOrderData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating work order:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a work order
+   */
+  static async deleteWorkOrder(workOrderId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${workOrderId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting work order:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Start assembly process for a work order
+   */
+  static async startAssembly(workOrderId, startedBy = 'Unknown User') {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${workOrderId}/start_assembly/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          started_by: startedBy
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error starting assembly:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Scan a component for an assembly
+   */
+  static async scanComponent(workOrderId, componentBarcode, sensorId = null, scannedBy = 'Unknown User') {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${workOrderId}/scan_component/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          component_barcode: componentBarcode,
+          sensor_id: sensorId,
+          scanned_by: scannedBy
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error scanning component:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Complete assembly with full tracking data
+   */
+  static async completeAssembly(workOrderId, completionData) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${workOrderId}/complete_assembly/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scanned_components: completionData.scanned_components || [],
+          assembly_barcode: completionData.assembly_barcode,
+          completed_by: completionData.completed_by || 'Unknown User',
+          start_time: completionData.start_time,
+          quality_notes: completionData.quality_notes || ''
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error completing assembly:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a rework order from an existing work order
+   */
+  static async createReworkOrder(originalWorkOrderId, reworkData) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/work-order/${originalWorkOrderId}/create_rework/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quantity: reworkData.quantity || 1,
+          notes: reworkData.notes || '',
+          released_by: reworkData.released_by || 'REWORK_SYSTEM'
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating rework order:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate barcode for assembly
+   */
+  static generateAssemblyBarcode(workOrderId, itemCode) {
+    const timestamp = Date.now().toString().substring(8); // Last 5 digits of timestamp
+    return `${itemCode}-${workOrderId}-${timestamp}`;
+  }
+
+  /**
+   * Generate work order barcode
+   */
+  static generateWorkOrderBarcode(workOrderId, itemCode) {
+    return `WO-${itemCode}-${workOrderId}`;
+  }
+
+  /**
+   * Get PCB Types
+   */
+  static async getPCBTypes() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pcb-types/`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results || [];
+    } catch (error) {
+      console.error('Error fetching PCB types:', error);
+      throw error;
+    }
+  }
+}
+
+// Legacy function exports for backward compatibility
+export const fetchWorkOrders = WorkOrderAPI.getAllWorkOrders;
+export const fetchWorkOrdersByType = WorkOrderAPI.getWorkOrdersByType;
+export const fetchWorkOrderById = WorkOrderAPI.getWorkOrder;
+export const createWorkOrder = WorkOrderAPI.createWorkOrder;
+export const updateWorkOrder = WorkOrderAPI.updateWorkOrder;
+export const deleteWorkOrder = WorkOrderAPI.deleteWorkOrder;
+export const createReworkOrder = WorkOrderAPI.createReworkOrder;
+export const fetchReworkOrders = WorkOrderAPI.getReworkOrders;
+export const fetchPCBTypes = WorkOrderAPI.getPCBTypes;
+export const fetchWorkOrdersByPCBType = WorkOrderAPI.getWorkOrdersByType;
+
+// Additional exports for assemblyUtils.js compatibility
+export const completeWorkOrderUnit = WorkOrderAPI.completeAssembly;
+export const updateWorkOrderCompletion = WorkOrderAPI.completeAssembly;
+export const createReworkFromCompletedAssembly = WorkOrderAPI.createReworkOrder;
+
+export default WorkOrderAPI;

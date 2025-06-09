@@ -66,23 +66,28 @@ const WorkOrderForm = () => {
         console.error('Failed to load PCB types', error);
         setPcbTypes(['YBS', 'RSM']);
       }
-    };
-
-    const loadItemMaster = async () => {
+    };    const loadItemMaster = async () => {
       try {
         const data = await fetchItemMaster();
         setItemMasterList(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Failed to load item master data', error);
+        toast.error('Failed to load item master data');
       }
     };
 
     const loadPcbItems = async () => {
       try {
         const data = await fetchPCBItems();
+        console.log('PCB Items loaded:', data);
         setPcbItems(Array.isArray(data) ? data : []);
+        
+        if (!data || data.length === 0) {
+          toast.warning('No PCB items found. Please import PCB data first.');
+        }
       } catch (error) {
         console.error('Failed to load PCB items', error);
+        toast.error('Failed to load PCB items');
         setPcbItems([]);
       }
     };
@@ -211,21 +216,41 @@ const WorkOrderForm = () => {
       }
     }
   };
-
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Basic validation
+    if (!formData.product) {
+      toast.error('Product name is required');
+      return;
+    }
+    
+    if (!formData.item_code) {
+      toast.error('Item code is required');
+      return;
+    }
+    
+    if (!formData.quantity || formData.quantity < 1) {
+      toast.error('Quantity must be at least 1');
+      return;
+    }
+    
+    if (!formData.target_date) {
+      toast.error('Target date is required');
+      return;
+    }
+    
     try {
       setLoading(true);
       
-      // Remove fields that aren't part of the WorkOrder model
+      // Prepare data for submission
       const dataToSend = {
         product: formData.product,
         item_code: formData.item_code,
         description: formData.description,
-        quantity: formData.quantity,
-        from_date: formData.from_date, // Add this line
+        quantity: parseInt(formData.quantity),
+        from_date: formData.from_date,
         target_date: formData.target_date,
         customer_name: formData.customer_name,
         machine_no: formData.machine_no,
@@ -234,15 +259,22 @@ const WorkOrderForm = () => {
         status: formData.status
       };
       
-      // If pcb_type is selected (as an ID), include it in the data
+      // Add PCB type if selected
       if (formData.pcb_type) {
         dataToSend.pcb_type = formData.pcb_type;
+      }
+      
+      // Add PCB item code if selected
+      if (formData.pcb_item_code) {
+        dataToSend.pcb_item_code = formData.pcb_item_code;
       }
       
       // Ensure we have a description
       if (!dataToSend.description) {
         dataToSend.description = `Work order for ${dataToSend.product} (${dataToSend.item_code})`;
       }
+      
+      console.log('Submitting work order data:', dataToSend);
       
       // If machine_id is selected, update machine_no
       if (formData.machine_id && !dataToSend.machine_no) {

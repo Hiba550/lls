@@ -2,11 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ConfirmationModal from '../components/modals/ConfirmationModal';
-import { fetchWorkOrders } from '../api/workOrderApi';
+import WorkOrderAPI from '../api/workOrderApi';
 import { fetchItemMaster } from '../api/itemMasterApi';
-import { createAssemblyProcess, fetchAssemblyProcesses, updateAssemblyProcessStatus } from '../api/assemblyApi';
+import { createAssemblyProcess, fetchAssemblyProcesses, updateAssemblyProcessStatus, getCompletedAssemblies } from '../api/assemblyApi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+// Import enhanced assembly utilities with multi-quantity support
+import { 
+  generateConsistentBarcodes,
+  generateWorkOrderBarcode,
+  generateAssemblyBarcode
+} from '../utils/assemblyUtils';
 
 // Enhanced data model for completed assemblies
 const completedAssemblySchema = {
@@ -28,8 +34,7 @@ const completedAssemblySchema = {
   zone: String
 };
 
-const Assembly = () => {
-  const [scannedData, setScannedData] = useState(null);
+const Assembly = () => {  const [scannedData, setScannedData] = useState(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [workOrders, setWorkOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -58,381 +63,201 @@ const Assembly = () => {
   const [orderToRework, setOrderToRework] = useState(null);
   const [isReworkModalOpen, setIsReworkModalOpen] = useState(false);
   const [reworkComponents, setReworkComponents] = useState([]);
-  const [reworkNotes, setReworkNotes] = useState('');
+  const [reworkNotes, setReworkNotes] = useState('');  // New state variables for completed work orders filtering (removed search, keeping only date filter)
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [completedAssembliesLoading, setCompletedAssembliesLoading] = useState(false);
   const navigate = useNavigate();
-
-  // Improved PCB type detection with better fallback handling
+  // Improved PCB type detection function
   const detectPcbType = (order) => {
-    if (!order) return 'YBS'; // Default fallback
+    // Check pcb_type_code first (serialized field from backend)
+    if (order.pcb_type_code) return order.pcb_type_code;
     
-    // Check explicit PCB type first
-    if (order.pcb_type) {
-      return order.pcb_type.toUpperCase();
-    }
+    // Check pcb_type field (legacy)
+    if (order.pcb_type) return order.pcb_type;
     
-    // Check item code for type indicators
+    // Check pcb_type_detail.code (nested object)
+    if (order.pcb_type_detail?.code) return order.pcb_type_detail.code;
+    
+    // Fallback to item_code detection
     if (order.item_code) {
-      const itemCode = order.item_code.toUpperCase();
-      if (itemCode.includes('YBS') || itemCode.includes('5YB')) {
-        return 'YBS';
-      }
-      if (itemCode.includes('RSM') || itemCode.includes('5RS')) {
-        return 'RSM';
-      }
+      if (order.item_code.includes('YBS') || order.item_code.includes('5YB')) return 'YBS';
+      if (order.item_code.includes('RSM') || order.item_code.includes('5RS')) return 'RSM';
     }
     
-    // Check product name for type indicators
+    // Fallback to product name detection
     if (order.product) {
-      const product = order.product.toUpperCase();
-      if (product.includes('YBS')) {
-        return 'YBS';
-      }
-      if (product.includes('RSM')) {
-        return 'RSM';
-      }
+      if (order.product.includes('YBS')) return 'YBS';
+      if (order.product.includes('RSM')) return 'RSM';
     }
     
-    // Check if it's a rework order with original type
-    if (order.is_rework && order.original_pcb_type) {
-      return order.original_pcb_type.toUpperCase();
-    }
-    
-    // Default to YBS if no clear type could be determined
-    console.warn('Could not determine PCB type for order:', order.id, 'defaulting to YBS');
-    return 'YBS';
+    return null;
   };
-
-  // Utility function to refresh all data and clean up inconsistencies
-  const refreshAssemblyData = async (showToast = true) => {
-    try {
-      if (showToast) {
-        toast.info('Refreshing assembly data...');
-      }
-      
-      // Clean up any orphaned localStorage entries
-      cleanupLocalStorage();
-      
-      // Re-sync work order states
-      await syncWorkOrderStates();
-      
-      if (showToast) {
-        toast.success('Assembly data refreshed successfully');
-      }
-      
-      console.log('Assembly data refresh completed');
-      
-    } catch (error) {
-      console.error('Error refreshing assembly data:', error);
-      if (showToast) {
-        toast.error('Failed to refresh data');
-      }
-    }
-  };
-
-  // Utility function to clean up localStorage inconsistencies
-  const cleanupLocalStorage = () => {
-    try {
-      // Get all current data
-      const completed = localStorageManager.get(STORAGE_KEYS.COMPLETED_ORDERS);
-      const rework = localStorageManager.get(STORAGE_KEYS.REWORK_ORDERS);
-      const mappings = localStorageManager.get(STORAGE_KEYS.BARCODE_MAPPINGS);
-      const auditLogs = localStorageManager.get(STORAGE_KEYS.AUDIT_LOGS);
-      
-      // Remove duplicates from completed orders
-      const uniqueCompleted = completed.reduce((acc, order) => {
-        if (!acc.find(existing => existing.id === order.id)) {
-          acc.push(order);
-        }
-        return acc;
-      }, []);
-      
-      // Remove duplicates from rework orders
-      const uniqueRework = rework.reduce((acc, order) => {
-        if (!acc.find(existing => existing.id === order.id)) {
-          acc.push(order);
-        }
-        return acc;
-      }, []);
-      
-      // Clean up old barcode mappings (keep only last 1000)
-      const recentMappings = mappings.slice(-1000);
-      
-      // Clean up old audit logs (keep only last 2000)
-      const recentAuditLogs = auditLogs.slice(-2000);
-      
-      // Save cleaned data
-      localStorageManager.set(STORAGE_KEYS.COMPLETED_ORDERS, uniqueCompleted);
-      localStorageManager.set(STORAGE_KEYS.REWORK_ORDERS, uniqueRework);
-      localStorageManager.set(STORAGE_KEYS.BARCODE_MAPPINGS, recentMappings);
-      localStorageManager.set(STORAGE_KEYS.AUDIT_LOGS, recentAuditLogs);
-      
-      // Clean up legacy storage keys
-      const legacyKeys = [
-        'completedWorkOrders',
-        'pendingWorkOrders', 
-        'workOrdersBackup',
-        'assemblyCompletionLogs',
-        'reworkLogs',
-        'componentUpdateLogs'
-      ];
-      
-      legacyKeys.forEach(key => {
-        try {
-          const data = localStorageManager.get(key);
-          if (data.length > 0) {
-            // Migrate data if needed, then clean up
-            if (key === 'completedWorkOrders' && uniqueCompleted.length === 0) {
-              localStorageManager.set(STORAGE_KEYS.COMPLETED_ORDERS, data);
-            }
-            // Keep legacy keys for backward compatibility but limit size
-            const limitedData = data.slice(-500);
-            localStorageManager.set(key, limitedData);
-          }
-        } catch (error) {
-          console.warn(`Failed to clean up legacy key ${key}:`, error);
-        }
-      });
-      
-      console.log('localStorage cleanup completed');
-      
-    } catch (error) {
-      console.error('Error during localStorage cleanup:', error);
-    }
-  };
-
-  // Enhanced work order status management with better error handling
-  const updateWorkOrderStatus = async (workOrderId, newStatus, additionalData = {}) => {
-    try {
-      const statusUpdate = {
-        workOrderId: workOrderId,
-        newStatus: newStatus,
-        previousStatus: workOrders.find(order => order.id === workOrderId)?.status || 'Unknown',
-        timestamp: new Date().toISOString(),
-        updatedBy: 'Current User',
-        ...additionalData
-      };
-      
-      // Create audit log for status change
-      const auditLog = {
-        action: 'WORK_ORDER_STATUS_UPDATED',
-        workOrderId: workOrderId,
-        statusChange: `${statusUpdate.previousStatus} → ${newStatus}`,
-        timestamp: statusUpdate.timestamp,
-        operator: 'Current User'
-      };
-      
-      const auditLogs = localStorageManager.get(STORAGE_KEYS.AUDIT_LOGS);
-      auditLogs.push(auditLog);
-      localStorageManager.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
-      
-      // Update local state
-      const updatedWorkOrders = workOrders.map(order => {
-        if (order.id === workOrderId) {
-          return {
-            ...order,
-            status: newStatus,
-            lastStatusUpdate: statusUpdate.timestamp,
-            statusHistory: [...(order.statusHistory || []), statusUpdate]
-          };
-        }
-        return order;
-      });
-      
-      setWorkOrders(updatedWorkOrders);
-      
-      // Try to update via API (non-blocking)
-      try {
-        const response = await fetch(`/api/work-orders/${workOrderId}/`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus })
-        });
-        
-        if (response.ok) {
-          console.log('Work order status updated in API successfully');
-        } else {
-          console.warn(`API status update failed: ${response.status}`);
-        }
-      } catch (apiError) {
-        console.warn('Failed to update work order status in API:', apiError);
-        // Don't throw here - local update succeeded
-      }
-      
-    } catch (error) {
-      console.error('Error updating work order status:', error);
-      toast.error(`Failed to update work order status: ${error.message}`);
-    }
-  };
-
-  // Centralized localStorage management for work orders
-  const STORAGE_KEYS = {
-    COMPLETED_ORDERS: 'assemblyCompletedOrders',
-    PENDING_ORDERS: 'assemblyPendingOrders',
-    REWORK_ORDERS: 'assemblyReworkOrders',
-    BARCODE_MAPPINGS: 'assemblyBarcodeMappings',
-    AUDIT_LOGS: 'assemblyAuditLogs'
-  };
-
-  // Utility function for consistent localStorage operations
-  const localStorageManager = {
-    get: (key) => {
-      try {
-        return JSON.parse(localStorage.getItem(key) || '[]');
-      } catch (error) {
-        console.error(`Error reading from localStorage key ${key}:`, error);
-        return [];
-      }
-    },
-    
-    set: (key, data) => {
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-        return true;
-      } catch (error) {
-        console.error(`Error writing to localStorage key ${key}:`, error);
-        return false;
-      }
-    },
-    
-    remove: (key) => {
-      try {
-        localStorage.removeItem(key);
-        return true;
-      } catch (error) {
-        console.error(`Error removing localStorage key ${key}:`, error);
-        return false;
-      }
-    }
-  };
-
-  // Enhanced work order state management with proper synchronization
-  const syncWorkOrderStates = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch fresh data from API
-      const [workOrdersData, assemblyData] = await Promise.all([
-        fetchWorkOrders().catch(() => []),
-        fetchAssemblyProcesses().catch(() => [])
-      ]);
-      
-      // Get local storage data
-      const localCompleted = localStorageManager.get(STORAGE_KEYS.COMPLETED_ORDERS);
-      const localRework = localStorageManager.get(STORAGE_KEYS.REWORK_ORDERS);
-      
-      // Create maps for efficient lookup
-      const completedMap = new Map();
-      const reworkMap = new Map();
-      
-      // Process local completed orders
-      localCompleted.forEach(order => {
-        completedMap.set(order.id, order);
-      });
-      
-      // Process local rework orders
-      localRework.forEach(order => {
-        reworkMap.set(order.id, order);
-      });
-      
-      // Process API assembly data
-      if (Array.isArray(assemblyData)) {
-        assemblyData.forEach(assembly => {
-          if (assembly.work_order && assembly.status === 'completed') {
-            completedMap.set(assembly.work_order.id, {
-              ...assembly.work_order,
-              hasCompletedAssembly: true,
-              assemblyProcessId: assembly.id,
-              completedAt: assembly.updated_at
-            });
-          }
-        });
-      }
-      
-      // Categorize work orders
-      const pending = [];
-      const completed = [];
-      const rework = [];
-      
-      if (Array.isArray(workOrdersData)) {
-        workOrdersData.forEach(order => {
-          // Check if it's a rework order
-          if (reworkMap.has(order.id) || order.is_rework) {
-            rework.push({
-              ...order,
-              ...reworkMap.get(order.id),
-              is_rework: true
-            });
-          }
-          // Check if it's completed
-          else if (completedMap.has(order.id) || order.status === 'Completed') {
-            completed.push({
-              ...order,
-              ...completedMap.get(order.id)
-            });
-          }
-          // Otherwise it's pending
-          else {
-            pending.push(order);
-          }
-        });
-      }
-      
-      // Add any local-only completed orders not in API
-      completedMap.forEach((order, id) => {
-        if (!completed.some(c => c.id === id) && !workOrdersData.some(w => w.id === id)) {
-          completed.push(order);
-        }
-      });
-      
-      // Add any local-only rework orders not in API
-      reworkMap.forEach((order, id) => {
-        if (!rework.some(r => r.id === id) && !workOrdersData.some(w => w.id === id)) {
-          rework.push(order);
-        }
-      });
-      
-      // Update state
-      setWorkOrders([...pending, ...rework]); // Include rework orders in pending view
-      setCompletedOrders(completed);
-      setError(null);
-      
-      // Log synchronization
-      console.log('Work order synchronization completed:', {
-        pending: pending.length,
-        completed: completed.length,
-        rework: rework.length
-      });
-      
-    } catch (err) {
-      console.error('Failed to sync work order states:', err);
-      setError('Failed to load work orders. Please try again.');
-      setWorkOrders([]);
-      setCompletedOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load work orders and assemblies with proper state synchronization
+  // Load work orders and assemblies from API only
   useEffect(() => {
-    const loadData = async () => {
-      // Load machine types for filtering
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+          // Fetch work orders from API using WorkOrderAPI
+        const workOrdersData = await WorkOrderAPI.getAllWorkOrders();
+        
+        // Fetch assembly processes to check completed ones
+        const assemblyData = await fetchAssemblyProcesses();
+        
+        // Process and categorize data
+        const pending = [];
+        const completed = [];
+        
+        if (Array.isArray(workOrdersData)) {
+          workOrdersData.forEach(order => {
+            // Add PCB type detection
+            const detectedPcbType = detectPcbType(order);
+            const processedOrder = {
+              ...order,
+              pcb_type: detectedPcbType,
+              pcb_type_code: detectedPcbType,
+              source: 'api'
+            };
+            
+            // Find if this work order has any completed assembly processes from API
+            const hasCompletedAssembly = Array.isArray(assemblyData) && 
+              assemblyData.some(assembly => 
+                assembly.work_order && 
+                assembly.work_order.id === order.id && 
+                assembly.status === 'completed'
+              );
+            
+            if (order.status === 'Completed' || hasCompletedAssembly) {
+              completed.push({...processedOrder, hasCompletedAssembly: true});
+            } else {
+              pending.push(processedOrder);
+            }
+          });
+        }
+          setWorkOrders(pending);
+        // Don't set completed orders here - they should only come from loadCompletedOrders()
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setError('Failed to load work orders. Please try again.');        // Fallback to empty array if API fails
+        setWorkOrders([]);
+        // Don't set completed orders here - they should only come from loadCompletedOrders()
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    // Load machine types for filtering
+    const loadMachineTypes = async () => {
       try {
         const items = await fetchItemMaster();
         if (Array.isArray(items)) {
+          // Extract unique machine types
           const types = [...new Set(items.map(item => item.machine_type).filter(Boolean))];
           setMachineTypes(types);
         }
       } catch (err) {
         console.error('Failed to load machine types:', err);
       }
-      
-      // Sync work order states
-      await syncWorkOrderStates();
     };
     
-    loadData();
-  }, []);
+    fetchData();
+    loadMachineTypes();
+  }, []);  // Load completed work orders from API with date filtering only
+  const loadCompletedOrders = async (startDateFilter = '', endDateFilter = '') => {
+    try {
+      setCompletedAssembliesLoading(true);
+      
+      // Fetch completed work orders from the work-order endpoint (not assembly-process)
+      // This will show actual completed work orders (4 total: 3 RSM + 1 YBS) not assemblies (35 total)
+      const completedWorkOrders = await WorkOrderAPI.getCompletedWorkOrders();
+      
+      console.log('Fetched completed work orders:', completedWorkOrders.length, completedWorkOrders);
+      
+      // Apply date filtering if specified
+      let filteredOrders = completedWorkOrders;
+      if (startDateFilter || endDateFilter) {
+        filteredOrders = completedWorkOrders.filter(order => {
+          const completedDate = order.completed_at ? new Date(order.completed_at).toISOString().split('T')[0] : null;
+          if (!completedDate) return false;
+          
+          let passesFilter = true;
+          if (startDateFilter && completedDate < startDateFilter) passesFilter = false;
+          if (endDateFilter && completedDate > endDateFilter) passesFilter = false;
+          
+          return passesFilter;
+        });
+      }
+      
+      // Convert work order format to display format - compatible with existing UI
+      const formattedOrders = filteredOrders.map(workOrder => {
+        // Get PCB type from pcb_type_detail or fallback detection
+        let detectedPcbType = workOrder.pcb_type_code || workOrder.pcb_type_detail?.code;
+        
+        if (!detectedPcbType) {
+          const itemCodeToCheck = workOrder.item_code || '';
+          const productToCheck = workOrder.product || '';
+          
+          if (itemCodeToCheck.includes('YBS') || itemCodeToCheck.includes('5YB')) {
+            detectedPcbType = 'YBS';
+          } else if (itemCodeToCheck.includes('RSM') || itemCodeToCheck.includes('5RS')) {
+            detectedPcbType = 'RSM';
+          } else if (productToCheck.includes('YBS')) {
+            detectedPcbType = 'YBS';
+          } else if (productToCheck.includes('RSM')) {
+            detectedPcbType = 'RSM';
+          }
+        }
+        
+        return {
+          id: workOrder.id,
+          workOrder: workOrder.display_id || workOrder.item_code || `WO-${workOrder.id}`,
+          product: workOrder.product || 'Unknown Product',
+          item_code: workOrder.item_code || 'Unknown Item',
+          serialNumber: workOrder.assembly_barcode || workOrder.work_order_barcode || 'N/A',
+          barcodeNumber: workOrder.assembly_barcode || workOrder.work_order_barcode || 'N/A',
+          completedAt: workOrder.completed_at || new Date().toISOString(),
+          scannedComponents: workOrder.scanned_components || [],
+          is_rework: workOrder.is_rework || false,
+          reworked: workOrder.is_rework || false,
+          rework_notes: workOrder.rework_notes || '',
+          pcb_type: detectedPcbType || 'Unknown',
+          pcb_type_code: detectedPcbType || 'Unknown',
+          zone: workOrder.machine_no || 'Unknown',
+          customer_name: workOrder.customer_name || 'Unknown',
+          completed_by: workOrder.completed_by || 'Unknown',
+          quantity: workOrder.quantity || 1,
+          completed_quantity: workOrder.completed_quantity || workOrder.quantity || 1,
+          completion_percentage: workOrder.completion_percentage || 100,
+          component_count: workOrder.component_count || (workOrder.scanned_components?.length || 0)
+        };
+      });
+      
+      console.log('Loaded completed work orders from database:', formattedOrders.length, formattedOrders);
+      setCompletedOrders(formattedOrders);
+    } catch (error) {
+      console.error('Error loading completed work orders from API:', error);
+      setCompletedOrders([]);
+      toast.error('Failed to load completed work orders');
+    } finally {
+      setCompletedAssembliesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCompletedOrders();
+  }, []);  // Handle date filter for completed work orders
+  const handleFilterCompletedAssemblies = () => {
+    loadCompletedOrders(startDate, endDate);
+  };
+
+  // Handle clear filters - reset to show all valid completed work orders from database
+  const handleClearFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    // Load all completed work orders from database (no filters)
+    loadCompletedOrders();
+  };
 
   // Update assembly progress when parts are scanned
   useEffect(() => {
@@ -524,39 +349,94 @@ const Assembly = () => {
     }
     setIsReplaceModalOpen(false);
     setIsScannerOpen(true);
-  };
-
-  const handleStartAssembly = async (workOrder) => {
+  };  const handleStartAssembly = async (workOrder) => {
     try {
       setLoading(true);
+        // Handle rework orders differently - navigate directly without API calls
+      if (workOrder.reworked || workOrder.is_rework || workOrder.id?.toString().startsWith('RW-')) {
+        console.log('Starting rework assembly directly for:', workOrder.id);
+        
+        // For rework orders, use the rework ID as assembly ID and navigate directly
+        const assemblyId = workOrder.id; // This is the rework ID like "RW-99-17513"
+        const workOrderIdForNavigation = workOrder.original_assembly_id || workOrder.id;
+        
+        // Get the item code for routing
+        const itemCode = workOrder.item_code || 'default';
+        const pcbType = detectPcbType(workOrder) || 'YBS';
+        
+        toast.info(`Starting rework assembly for ${pcbType}...`);
+        
+        // Navigate to assembly interface for rework
+        if (pcbType === 'YBS') {
+          navigate(`/assembly/ybs/${itemCode}?assemblyId=${assemblyId}&workOrderId=${workOrderIdForNavigation}&rework=true`);
+        } else {
+          navigate(`/assembly/rsm/${itemCode}?assemblyId=${assemblyId}&workOrderId=${workOrderIdForNavigation}&rework=true`);
+        }
+        return;
+      }
       
-      // Determine PCB type from the work order using our helper
+      // For regular (non-rework) work orders, create assembly process via API
       const pcbType = detectPcbType(workOrder) || 'YBS';
       toast.info(`Creating ${pcbType} assembly process...`);
+        // For regular work orders, use the work order ID directly
+      const workOrderId = workOrder.id;
+      
+      // Debug logging
+      console.log('Starting assembly for work order:', workOrder);
+      console.log('Detected workOrderId:', workOrderId);
+      console.log('PCB Type:', pcbType);
+      
+      // Validate that workOrderId is not null or undefined
+      if (!workOrderId) {
+        console.error('WorkOrderId is null or undefined!', { workOrder, workOrderId });
+        toast.error('Cannot start assembly: Work Order ID is missing');
+        return;
+      }
+      
+      // Validate that this is a valid database work order ID (not a local/rework ID)
+      if (typeof workOrderId === 'string' && (
+        workOrderId.startsWith('RW-') || 
+        workOrderId.startsWith('local-') ||
+        workOrderId.includes('rework')
+      )) {
+        console.error('Invalid work order ID for API call:', workOrderId);
+        toast.error('Cannot create assembly process: Invalid work order ID. This appears to be a local or rework order.');
+        return;
+      }
+      
+      // Debug logging
+      console.log('Starting assembly for work order:', workOrder);
+      console.log('Detected workOrderId:', workOrderId);
+      console.log('PCB Type:', pcbType);
+      
+      // Validate that workOrderId is not null or undefined
+      if (!workOrderId) {
+        console.error('WorkOrderId is null or undefined!', { workOrder, workOrderId });
+        toast.error('Cannot start assembly: Work Order ID is missing');
+        return;
+      }
       
       // Create a new assembly process
       const assemblyData = {
-        work_order: workOrder.id,
+        work_order: workOrderId,
         created_by: 'Current User', 
         status: 'pending',
         pcb_type: pcbType
       };
-      
       const newAssembly = await createAssemblyProcess(assemblyData);
       
       if (newAssembly && newAssembly.id) {
         toast.success(`Assembly process created! Serial number: ${newAssembly.serial_number || 'Created'}`);
-        
-        // Get the item code for routing - use a default if not available
+          // Get the item code for routing - use a default if not available
         const itemCode = workOrder.item_code || 'default';
         
-        // For YBS PCBs, navigate to YBS assembly page
+        // For YBS PCBs, navigate to YBS assembly page (lowercase route)
         if (pcbType === 'YBS') {
-          navigate(`/assembly/ybs/${itemCode}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`);
+          navigate(`/assembly/ybs/${itemCode}?assemblyId=${newAssembly.id}&workOrderId=${workOrderId}`);
         } 
         // For RSM PCBs, navigate to RSM assembly page
         else {
-          navigate(`/assembly/rsm/${itemCode}?assemblyId=${newAssembly.id}&workOrderId=${workOrder.id}`);
+          navigate(`/assembly/rsm/${itemCode}?assemblyId=${newAssembly.id}&workOrderId=${workOrderId}`);
         }
       } else {
         throw new Error('Failed to create assembly: Invalid response');
@@ -567,229 +447,100 @@ const Assembly = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Enhanced completion function with quantity-based work order management
+  };  // Enhanced completion function with full database backend support
   const completeAssembly = async () => {
     try {
       setLoading(true);
       
-      if (!selectedOrder) {
-        throw new Error('No work order selected');
-      }
+      // Generate barcodes using utility functions
+      const pcbType = detectPcbType(selectedOrder);
+      const workOrderBarcode = selectedOrder.work_order_barcode || generateWorkOrderBarcode();
+      const assemblyBarcode = serialNumber || generateAssemblyBarcode(pcbType);
       
-      // Get current work order quantity information
-      const currentQuantity = selectedOrder.quantity || 1;
-      const completedQuantity = selectedOrder.completed_quantity || 0;
-      const remainingQuantity = currentQuantity - completedQuantity - 1; // -1 for current completion
-      
-      console.log('Quantity check:', {
-        total: currentQuantity,
-        completed: completedQuantity,
-        remaining: remainingQuantity
-      });
-      
-      // Generate or use existing consistent barcode numbers
-      const barcodeMapping = localStorageManager.get(STORAGE_KEYS.BARCODE_MAPPINGS)
-        .find(mapping => mapping.workOrderId === selectedOrder.id);
-      
-      const workOrderBarcodeNumber = barcodeMapping?.workOrderBarcode || 
-        selectedOrder.barcodeNumber || 
-        selectedOrder.workOrderBarcodeNumber || 
-        generateBarcodeNumber();
-      
-      // Generate unique assembly barcode for this specific unit
-      const unitNumber = completedQuantity + 1;
-      const assemblyBarcodeNumber = barcodeMapping?.assemblyBarcode ||
-        serialNumber || 
-        generateSerialNumber(`${selectedOrder.product}-Unit${unitNumber}`);
-      
-      // Store barcode mapping for consistency
-      if (!barcodeMapping) {
-        const newMapping = {
-          workOrderId: selectedOrder.id,
-          workOrderBarcode: workOrderBarcodeNumber,
-          assemblyBarcode: assemblyBarcodeNumber,
-          pcbType: detectPcbType(selectedOrder),
-          generatedAt: new Date().toISOString()
-        };
-        
-        const mappings = localStorageManager.get(STORAGE_KEYS.BARCODE_MAPPINGS);
-        mappings.push(newMapping);
-        localStorageManager.set(STORAGE_KEYS.BARCODE_MAPPINGS, mappings);
-      }
-      
-      // Prepare comprehensive completed unit data
-      const completedUnitData = {
-        id: `${selectedOrder.id}-unit-${unitNumber}`, // Unique ID for this unit
-        original_work_order_id: selectedOrder.id,
-        workOrder: selectedOrder.id,
-        workOrderBarcodeNumber: workOrderBarcodeNumber,
-        assemblyBarcodeNumber: assemblyBarcodeNumber,
-        serialNumber: assemblyBarcodeNumber,
-        barcodeNumber: workOrderBarcodeNumber,
-        product: `${selectedOrder.product} (Unit ${unitNumber}/${currentQuantity})`,
-        item_code: selectedOrder.item_code,
-        pcb_type: detectPcbType(selectedOrder),
-        unit_number: unitNumber,
-        total_units: currentQuantity,
-        scannedComponents: scannedParts.map(part => ({
+      // Prepare completion data
+      const completionData = {
+        scanned_components: scannedParts.map(part => ({
           barcode: part.partCode,
-          componentName: part.componentName || part.partCode,
-          itemCode: part.itemCode || part.partCode,
-          scanTime: part.scanTime,
-          operator: part.operator,
-          replaced: part.replaced || false,
-          replaceReason: part.replaceReason || null,
-          replacedWith: part.replacedWith || null,
-          replaceTime: part.replaceTime || null
+          component_name: part.componentName || part.partCode,
+          scanned_at: part.scanTime || new Date().toISOString(),
+          scanned_by: 'Current User'
         })),
-        parts: scannedParts,
-        completedAt: new Date().toISOString(),
-        completedBy: 'Current User',
-        status: 'Completed',
-        is_rework: selectedOrder.is_rework || false,
-        original_assembly_id: selectedOrder.original_assembly_id || null,
-        zone: selectedOrder.zone || 'Assembly',
-        completion_metadata: {
-          totalComponents: scannedParts.length,
-          replacedComponents: scannedParts.filter(part => part.replaced).length,
-          assemblyDuration: Date.now() - (selectedOrder.startTime || Date.now()),
-          operator: 'Current User',
-          workstation: 'Assembly-01',
-          completionTimestamp: new Date().toISOString(),
-          unitInformation: {
-            unitNumber: unitNumber,
-            totalUnits: currentQuantity,
-            remainingUnits: remainingQuantity
-          }
-        }
+        assembly_barcode: assemblyBarcode,
+        completed_by: 'Current User',
+        start_time: selectedOrder.assembly_start_time,
+        quality_notes: ''
       };
       
-      console.log('Completing assembly unit:', completedUnitData);
+      // Use WorkOrderAPI to complete assembly
+      const updatedWorkOrder = await WorkOrderAPI.completeAssembly(selectedOrder.id, completionData);
       
-      // Try to save completed unit to API
-      let apiSuccess = false;
-      try {
-        const response = await fetch('/api/assembly/completed-assemblies/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(completedUnitData)
-        });
-        
-        if (response.ok) {
-          apiSuccess = true;
-          console.log('Assembly unit saved to API successfully');
-        } else {
-          throw new Error(`API returned ${response.status}`);
-        }
-      } catch (apiError) {
-        console.warn('API save failed, will save locally:', apiError);
-      }
-      
-      // Save completed unit to localStorage
-      const completedOrders = localStorageManager.get(STORAGE_KEYS.COMPLETED_ORDERS);
-      completedOrders.push(completedUnitData);
-      
-      if (!localStorageManager.set(STORAGE_KEYS.COMPLETED_ORDERS, completedOrders)) {
-        throw new Error('Failed to save completion data locally');
-      }
-      
-      // Handle work order state based on remaining quantity
-      let updatedWorkOrders;
-      let shouldRemoveFromPending = false;
-      
-      if (remainingQuantity <= 0) {
-        // All units completed - remove from pending
-        console.log('All units completed, removing work order from pending');
-        updatedWorkOrders = workOrders.filter(order => order.id !== selectedOrder.id);
-        shouldRemoveFromPending = true;
-        
-        // Update work order status to fully completed
-        await updateWorkOrderStatus(selectedOrder.id, 'Completed', {
-          completedQuantity: currentQuantity,
-          allUnitsCompleted: true
-        });
-        
-        toast.success(`Work Order fully completed! All ${currentQuantity} units finished.`);
-      } else {
-        // More units needed - keep in pending but update progress
-        console.log(`${remainingQuantity} units remaining, updating work order progress`);
-        
-        const updatedOrder = {
-          ...selectedOrder,
-          completed_quantity: completedQuantity + 1,
-          remaining_quantity: remainingQuantity,
-          status: 'In Progress',
-          progress_notes: `Unit ${unitNumber} completed. ${remainingQuantity} units remaining.`,
-          lastCompletedUnit: unitNumber,
-          lastCompletedAt: new Date().toISOString()
-        };
-        
-        updatedWorkOrders = workOrders.map(order => 
-          order.id === selectedOrder.id ? updatedOrder : order
-        );
-        
-        // Update work order progress in API
-        try {
-          await fetch(`/api/work-orders/${selectedOrder.id}/`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              completed_quantity: completedQuantity + 1,
-              status: 'In Progress'
-            })
-          });
-        } catch (err) {
-          console.warn('Failed to update work order progress in API:', err);
-        }
-        
-        toast.success(`Unit ${unitNumber} completed! ${remainingQuantity} more units needed for this work order.`);
-      }
-      
-      // Update assembly process status if available
+      // Update assembly process status in API
       if (selectedOrder.assemblyProcessId) {
         try {
-          const processStatus = shouldRemoveFromPending ? 'completed' : 'in_progress';
-          await updateAssemblyProcessStatus(selectedOrder.assemblyProcessId, processStatus);
+          await updateAssemblyProcessStatus(selectedOrder.assemblyProcessId, 'completed');
         } catch (err) {
-          console.warn('Failed to update assembly process status:', err);
+          console.error('Failed to update assembly process status:', err);
         }
       }
       
-      // Update local state
-      setWorkOrders(updatedWorkOrders);
-      setCompletedOrders(prev => [...prev, completedUnitData]);
+      // Update local state based on whether work order is fully completed
+      const isFullyCompleted = updatedWorkOrder.status === 'Completed';
       
-      // Reset form state
-      setSelectedOrder(null);
-      setScannedParts([]);
-      setSerialNumber('');
-      setIsCompleteModalOpen(false);
-      
-      // Create comprehensive audit log
-      const auditLog = {
-        action: 'ASSEMBLY_UNIT_COMPLETED',
-        workOrderId: selectedOrder.id,
-        unitNumber: unitNumber,
-        totalUnits: currentQuantity,
-        remainingUnits: remainingQuantity,
-        workOrderBarcode: workOrderBarcodeNumber,
-        assemblyBarcode: assemblyBarcodeNumber,
-        componentCount: scannedParts.length,
-        timestamp: new Date().toISOString(),
-        apiSuccess: apiSuccess,
-        operator: 'Current User',
-        workOrderFullyCompleted: shouldRemoveFromPending
-      };
-      
-      const auditLogs = localStorageManager.get(STORAGE_KEYS.AUDIT_LOGS);
-      auditLogs.push(auditLog);
-      // Keep only last 1000 entries
-      if (auditLogs.length > 1000) {
-        auditLogs.splice(0, auditLogs.length - 1000);
+      if (isFullyCompleted) {
+        // Work order is fully completed - move to completed list
+        const updatedPending = workOrders.filter(order => order.id !== selectedOrder.id);
+        
+        setWorkOrders(updatedPending);
+          // Refresh completed orders from API to get latest data
+        loadCompletedOrders();
+        
+        // Reset form state completely
+        setSelectedOrder(null);
+        setScannedParts([]);
+        setSerialNumber('');
+        setIsCompleteModalOpen(false);
+          // Show completion message
+        toast.success(`Assembly completed successfully! Work Order: ${workOrderBarcode}, Assembly: ${assemblyBarcode}`);
+        
+      } else {
+        // Work order has more units to complete - update but keep in pending
+        const updatedPending = workOrders.map(order => 
+          order.id === selectedOrder.id ? updatedWorkOrder : order
+        );
+        
+        setWorkOrders(updatedPending);
+        
+        // Reset only the scanned parts and serial number for next unit
+        setScannedParts([]);
+        setSerialNumber('');
+        
+        // Keep the order selected for next unit
+        setSelectedOrder(updatedWorkOrder);
+        
+        // Close the modal but show continue message
+        setIsCompleteModalOpen(false);
+        
+        // Show continue message
+        const remaining = updatedWorkOrder.quantity - updatedWorkOrder.completed_quantity;
+        toast.success(`Unit ${updatedWorkOrder.completed_quantity} of ${updatedWorkOrder.quantity} completed!`, {
+          duration: 8000,
+          style: {
+            background: '#10B981',
+            color: 'white'
+          }
+        });
+        
+        // Show instruction for next unit
+        setTimeout(() => {
+          toast.info(`Ready for unit ${updatedWorkOrder.completed_quantity + 1} of ${updatedWorkOrder.quantity}. ${remaining} units remaining.`, {
+            duration: 5000,
+            style: {
+              background: '#3B82F6',
+              color: 'white'
+            }
+          });
+        }, 2000);
       }
-      localStorageManager.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
       
     } catch (err) {
       console.error('Failed to complete assembly:', err);
@@ -843,42 +594,13 @@ const Assembly = () => {
     }
   };
 
-  // Simplified component barcode update function
+  // Enhanced component barcode update function
   const updateComponentBarcode = async (assemblyId, oldBarcode, newBarcode, reason) => {
     try {
       setLoading(true);
       
-      // Update local state
-      const updatedCompletedOrders = completedOrders.map(order => {
-        if (order.id === assemblyId) {
-          const updatedComponents = order.scannedComponents?.map(comp => {
-            if (comp.barcode === oldBarcode) {
-              return {
-                ...comp,
-                previous_barcode: oldBarcode,
-                barcode: newBarcode,
-                replacement_reason: reason,
-                replacement_time: new Date().toISOString(),
-                replaced_by: 'Current User'
-              };
-            }
-            return comp;
-          }) || [];
-          
-          return {
-            ...order,
-            scannedComponents: updatedComponents
-          };
-        }
-        return order;
-      });
-      
-      setCompletedOrders(updatedCompletedOrders);
-      
-      // Update localStorage
-      localStorageManager.set(STORAGE_KEYS.COMPLETED_ORDERS, updatedCompletedOrders);
-      
-      // Try to update via API (non-blocking)
+      // Try enhanced API endpoint first
+      let savedToAPI = false;
       try {
         const response = await fetch('/api/assembly/update-component-barcode/', {
           method: 'POST',
@@ -893,28 +615,42 @@ const Assembly = () => {
         });
         
         if (response.ok) {
-          console.log('Component barcode updated via API');
+          const result = await response.json();
+          savedToAPI = true;
+          console.log('Component barcode updated via enhanced API:', result);
+            toast.success(`Component barcode updated: ${oldBarcode} → ${newBarcode}`);
+          
+          // Refresh completed orders from API to get latest data
+          loadCompletedOrders();
+          
+        } else {
+          throw new Error(`API returned ${response.status}: ${response.statusText}`);
         }
+        
       } catch (apiError) {
-        console.warn('API update failed:', apiError);
+        console.error('Enhanced API failed:', apiError);
+        toast.error('Failed to update component barcode. Please try again.');
+        return; // Don't proceed with local fallback
+      }      
+      // Log the component update via API
+      try {
+        await fetch('/api/assembly/component-update-logs/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'COMPONENT_BARCODE_UPDATED',
+            assemblyId: assemblyId,
+            oldBarcode: oldBarcode,
+            newBarcode: newBarcode,
+            reason: reason,
+            timestamp: new Date().toISOString(),
+            operator: 'Current User',
+            savedToAPI: savedToAPI
+          })
+        });
+      } catch (logError) {
+        console.warn('Failed to save update log:', logError);
       }
-      
-      // Create audit log
-      const auditLog = {
-        action: 'COMPONENT_BARCODE_UPDATED',
-        assemblyId: assemblyId,
-        oldBarcode: oldBarcode,
-        newBarcode: newBarcode,
-        reason: reason,
-        timestamp: new Date().toISOString(),
-        operator: 'Current User'
-      };
-      
-      const auditLogs = localStorageManager.get(STORAGE_KEYS.AUDIT_LOGS);
-      auditLogs.push(auditLog);
-      localStorageManager.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
-      
-      toast.success(`Component barcode updated: ${oldBarcode} → ${newBarcode}`);
       
     } catch (error) {
       console.error('Error updating component barcode:', error);
@@ -923,84 +659,163 @@ const Assembly = () => {
       setLoading(false);
     }
   };
+  // Enhanced logging utility for comprehensive audit trail via API
+  const createAuditLog = async (action, details, additionalData = {}) => {
+    const logEntry = {
+      id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: action,
+      details: details,
+      timestamp: new Date().toISOString(),
+      operator: 'Current User',
+      workstation: 'Assembly-01',
+      ...additionalData
+    };
+    
+    try {
+      await fetch('/api/assembly/audit-logs/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logEntry)
+      });
+      console.log('Audit log created via API:', logEntry);
+    } catch (error) {
+      console.warn('Failed to create audit log via API:', error);
+    }
+  };
+  // Enhanced barcode generation with API-based consistency tracking
+  const generateConsistentBarcodes = async (pcbType = 'YBS') => {
+    const workOrderBarcode = generateBarcodeNumber();
+    const assemblyBarcode = generateSerialNumber(`${pcbType} Assembly`);
+    
+    // Store barcode mapping via API
+    const barcodeMapping = {
+      workOrderBarcode: workOrderBarcode,
+      assemblyBarcode: assemblyBarcode,
+      pcbType: pcbType,
+      generatedAt: new Date().toISOString(),
+      generatedBy: 'Current User'
+    };
+    
+    try {
+      await fetch('/api/assembly/barcode-mappings/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(barcodeMapping)
+      });
+    } catch (error) {
+      console.error('Failed to store barcode mapping:', error);
+    }
+    
+    return barcodeMapping;
+  };
 
-  // Enhanced filter work orders with improved categorization and rework handling
+  // Enhanced work order status management
+  const updateWorkOrderStatus = async (workOrderId, newStatus, additionalData = {}) => {
+    try {
+      const statusUpdate = {
+        workOrderId: workOrderId,
+        newStatus: newStatus,
+        previousStatus: workOrders.find(order => order.id === workOrderId)?.status || 'Unknown',
+        timestamp: new Date().toISOString(),
+        updatedBy: 'Current User',
+        ...additionalData
+      };
+      
+      // Create audit log for status change
+      createAuditLog('WORK_ORDER_STATUS_UPDATED', statusUpdate);
+      
+      // Update local state
+      const updatedWorkOrders = workOrders.map(order => {
+        if (order.id === workOrderId) {
+          return {
+            ...order,
+            status: newStatus,
+            lastStatusUpdate: statusUpdate.timestamp,
+            statusHistory: [...(order.statusHistory || []), statusUpdate]
+          };
+        }
+        return order;
+      });
+      
+      setWorkOrders(updatedWorkOrders);
+      
+      // Try to update via API
+      try {
+        const response = await fetch(`/api/work-orders/${workOrderId}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (response.ok) {
+          console.log('Work order status updated in API successfully');
+        } else {
+          throw new Error(`API returned ${response.status}`);
+        }
+      } catch (apiError) {
+        console.warn('Failed to update work order status in API:', apiError);
+      }
+      
+    } catch (error) {
+      console.error('Error updating work order status:', error);
+      toast.error(`Failed to update work order status: ${error.message}`);
+    }
+  };
+
+  // Filter work orders by PCB type and search term - improved categorization
   const filterWorkOrders = (orders) => {
     return orders.filter(order => {
       // Apply PCB type filtering
       const orderPcbType = detectPcbType(order);
-      const matchesPcbType = pcbTypeFilter === 'all' ? true : pcbTypeFilter === orderPcbType;
       
-      // Apply search term filtering with more comprehensive matching
+      const matchesPcbType = pcbTypeFilter === 'all' ? true : 
+                            pcbTypeFilter === orderPcbType;
+      
+      // Apply search term filtering
       const matchesSearch = searchTerm ? 
         (order.product?.toLowerCase().includes(searchTerm.toLowerCase()) ||
          order.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         order.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         order.serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
          order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         order.machine_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         order.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         (order.is_rework && 'rework'.includes(searchTerm.toLowerCase()))) 
+         order.machine_type?.toLowerCase().includes(searchTerm.toLowerCase())) 
         : true;
       
       return matchesPcbType && matchesSearch;
     });
   };
 
-  // Enhanced sort function with better handling of different data types
+  // Sort filtered work orders
   const sortWorkOrders = (orders) => {
     return [...orders].sort((a, b) => {
-      // Handle null/undefined values
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
-      
-      if (aValue == null && bValue == null) return 0;
-      if (aValue == null) return 1;
-      if (bValue == null) return -1;
+      if (!a[sortBy] && !b[sortBy]) return 0;
+      if (!a[sortBy]) return 1;
+      if (!b[sortBy]) return -1;
       
       const order = sortDesc ? -1 : 1;
-      
-      // Handle date sorting
-      if (sortBy === 'target_date' || sortBy === 'created_at' || sortBy === 'completedAt') {
-        const dateA = new Date(aValue);
-        const dateB = new Date(bValue);
-        return order * (dateA - dateB);
+      if (sortBy === 'target_date') {
+        return order * (new Date(a[sortBy]) - new Date(b[sortBy]));
       }
       
-      // Handle string sorting
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return order * aValue.localeCompare(bValue);
+      if (typeof a[sortBy] === 'string') {
+        return order * a[sortBy].localeCompare(b[sortBy]);
       }
       
-      // Handle numeric sorting
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return order * (aValue - bValue);
-      }
-      
-      // Fallback to string comparison
-      return order * String(aValue).localeCompare(String(bValue));
+      return order * (a[sortBy] - b[sortBy]);
     });
   };
+    const filteredPendingOrders = filterWorkOrders(workOrders);
+  const sortedPendingOrders = sortWorkOrders(filteredPendingOrders);  // Completed orders are already filtered by the API (only assemblies with existing work orders)
+  // No additional client-side filtering needed - use data directly from API
+  console.log('Total completed orders from database:', completedOrders.length);
   
-  // Process and categorize orders
-  const filteredPendingOrders = filterWorkOrders(workOrders);
-  const sortedPendingOrders = sortWorkOrders(filteredPendingOrders);
+  const sortedCompletedOrders = sortWorkOrders(completedOrders);
   
-  const filteredCompletedOrders = filterWorkOrders(completedOrders);
-  const sortedCompletedOrders = sortWorkOrders(filteredCompletedOrders);
-  
-  // Categorize pending orders by PCB type with improved detection
+  // Categorize by PCB type with improved detection
   const ysbOrders = filteredPendingOrders.filter(order => detectPcbType(order) === 'YBS');
   const rsmOrders = filteredPendingOrders.filter(order => detectPcbType(order) === 'RSM');
   
-  // Separate rework orders for special handling
-  const reworkOrders = filteredPendingOrders.filter(order => order.is_rework);
-  const regularOrders = filteredPendingOrders.filter(order => !order.is_rework);
-  
-  // Unassigned orders (fallback - should be rare with improved detection)
-  const unassignedOrders = regularOrders.filter(order => {
-    const pcbType = detectPcbType(order);
-    return pcbType !== 'YBS' && pcbType !== 'RSM';
-  });
+  // Unassigned orders (neither YBS nor RSM)
+  const unassignedOrders = filteredPendingOrders.filter(order => detectPcbType(order) === null);
 
   const handleSort = (field) => {
     if (sortBy === field) {
@@ -1023,193 +838,68 @@ const Assembly = () => {
     setOrderToRework(order);
     setIsReworkModalOpen(true);
   };
-
-  // Improved function to remove assembly from completed orders when reworking
-  const removeFromCompletedOrders = (assemblyId) => {
+  // Function to remove an assembly from completed orders when it's being reworked
+  const removeFromCompletedOrders = async (assemblyId) => {
     try {
-      // Update state
-      setCompletedOrders(prev => prev.filter(order => order.id !== assemblyId));
+      // Mark as reworked in backend
+      await updateAssemblyProcess(assemblyId, {
+        reworked: true,
+        rework_notes: 'Sent for rework'
+      });
       
-      // Update localStorage consistently
-      const completedOrders = localStorageManager.get(STORAGE_KEYS.COMPLETED_ORDERS);
-      const updatedOrders = completedOrders.filter(order => order.id !== assemblyId);
-      localStorageManager.set(STORAGE_KEYS.COMPLETED_ORDERS, updatedOrders);
+      // Refresh completed orders from API to get latest data
+      loadCompletedOrders();
       
-      // Clean up legacy storage keys for backward compatibility
-      const legacyCompleted = localStorageManager.get('completedWorkOrders');
-      const updatedLegacy = legacyCompleted.filter(order => order.id !== assemblyId);
-      localStorageManager.set('completedWorkOrders', updatedLegacy);
-      
-      // Create audit log
-      const auditLog = {
-        action: 'ASSEMBLY_REMOVED_FROM_COMPLETED',
-        assemblyId: assemblyId,
-        timestamp: new Date().toISOString(),
-        reason: 'Sent for rework',
-        operator: 'Current User'
-      };
-      
-      const auditLogs = localStorageManager.get(STORAGE_KEYS.AUDIT_LOGS);
-      auditLogs.push(auditLog);
-      localStorageManager.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
-      
-      console.log('Assembly removed from completed orders:', assemblyId);
-      
+      toast.info('Assembly removed from completed orders and sent for rework');
     } catch (error) {
-      console.error('Error removing assembly from completed orders:', error);
-      toast.error('Failed to update assembly status');
+      console.error('Error updating completed orders:', error);
     }
   };
-
-  // Enhanced rework order creation with improved state management
+  // Enhanced rework order creation using WorkOrderAPI
   const createReworkOrder = async () => {
     try {
       setLoading(true);
       
-      if (!orderToRework) {
-        throw new Error('No order selected for rework');
-      }
-      
-      // Generate consistent rework ID
-      const reworkId = `RW-${orderToRework.id}-${Date.now().toString().slice(-6)}`;
-      const pcbType = detectPcbType(orderToRework);
-      
-      // Preserve original barcode numbers for consistency
-      const originalBarcodeMapping = localStorageManager.get(STORAGE_KEYS.BARCODE_MAPPINGS)
-        .find(mapping => mapping.workOrderId === orderToRework.id);
-      
-      const originalWorkOrderBarcode = originalBarcodeMapping?.workOrderBarcode || 
-        orderToRework.barcodeNumber || 
-        orderToRework.workOrderBarcodeNumber;
-      
-      const originalAssemblyBarcode = originalBarcodeMapping?.assemblyBarcode ||
-        orderToRework.serialNumber || 
-        orderToRework.assemblyBarcodeNumber;
-      
-      // Create comprehensive rework order
-      const reworkOrder = {
-        id: reworkId,
-        original_assembly_id: orderToRework.id,
-        product: `${orderToRework.product} (REWORK)`,
-        item_code: orderToRework.item_code,
-        quantity: orderToRework.quantity || 1,
-        priority: 'high',
-        status: 'Pending',
-        created_at: new Date().toISOString(),
-        target_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Due tomorrow
-        notes: reworkNotes || 'Rework required - quality issues detected',
-        is_rework: true,
-        pcb_type: pcbType,
-        
-        // Preserve original barcode information
-        original_work_order_barcode: originalWorkOrderBarcode,
-        original_assembly_barcode: originalAssemblyBarcode,
-        
-        // Rework specific data
-        rework_components: reworkComponents.length > 0 
-          ? reworkComponents.map(c => ({
-              barcode: c.barcode || c.componentName,
-              componentName: c.componentName || c.barcode,
-              reason: c.reason || 'Quality issue',
-              detectedAt: new Date().toISOString()
-            }))
-          : [],
-        
-        rework_type: reworkComponents.length > 0 ? 'COMPONENT_REPLACEMENT' : 'FULL_REWORK',
-        rework_notes: reworkNotes,
-        
-        // Store previous component data for reference
-        previous_components: orderToRework.scannedComponents || [],
-        
-        // Rework metadata
-        rework_metadata: {
-          reworkInitiatedBy: 'Current User',
-          reworkInitiatedAt: new Date().toISOString(),
-          originalCompletedAt: orderToRework.completedAt,
-          reworkReason: reworkNotes,
-          componentsAffected: reworkComponents.length || 'All components'
-        },
-        
-        // Visual indicators
-        rework_badge: 'REWORK REQUIRED',
-        zone: orderToRework.zone || 'Assembly'
+      // Prepare rework data
+      const reworkData = {
+        quantity: 1,
+        notes: reworkNotes || 'Rework needed - quality issues detected',
+        released_by: 'Current User'
       };
       
-      console.log('Creating rework order:', reworkOrder);
+      // Use WorkOrderAPI to create rework order
+      const reworkOrder = await WorkOrderAPI.createReworkOrder(orderToRework.workOrder || orderToRework.id, reworkData);
       
-      // Try to save to API
-      let apiSuccess = false;
-      try {
-        const response = await fetch('/api/work-orders/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(reworkOrder)
-        });
-        
-        if (response.ok) {
-          apiSuccess = true;
-          console.log('Rework order saved to API successfully');
-        } else {
-          throw new Error(`API returned ${response.status}`);
-        }
-      } catch (apiError) {
-        console.warn('API save failed, will save locally:', apiError);
-      }
+      console.log('Rework order created:', reworkOrder);
       
-      // Save to localStorage (always as backup)
-      const reworkOrders = localStorageManager.get(STORAGE_KEYS.REWORK_ORDERS);
-      const filteredRework = reworkOrders.filter(order => 
-        order.id !== reworkId && order.original_assembly_id !== orderToRework.id
-      );
-      filteredRework.push(reworkOrder);
-      
-      if (!localStorageManager.set(STORAGE_KEYS.REWORK_ORDERS, filteredRework)) {
-        throw new Error('Failed to save rework order locally');
-      }
-      
-      // Remove from completed orders
-      removeFromCompletedOrders(orderToRework.id);
-      
-      // Add to pending work orders
-      setWorkOrders(prev => [...prev, reworkOrder]);
-      
-      // Create audit log
-      const auditLog = {
-        action: 'REWORK_ORDER_CREATED',
-        originalAssemblyId: orderToRework.id,
-        reworkOrderId: reworkId,
-        reworkReason: reworkNotes,
-        componentsToRework: reworkComponents.length || 'ALL',
-        timestamp: new Date().toISOString(),
-        apiSuccess: apiSuccess,
-        operator: 'Current User'
+      // Add the new rework order to pending orders
+      const updatedReworkOrder = {
+        ...reworkOrder,
+        pcb_type: detectPcbType(reworkOrder),
+        displayId: `RW-${String(reworkOrder.id).padStart(6, '0')}`,
+        source: 'api'
       };
       
-      const auditLogs = localStorageManager.get(STORAGE_KEYS.AUDIT_LOGS);
-      auditLogs.push(auditLog);
-      localStorageManager.set(STORAGE_KEYS.AUDIT_LOGS, auditLogs);
+      setWorkOrders(prev => [updatedReworkOrder, ...prev]);
       
-      // Close modal and reset state
+      // Remove the original assembly from completed orders
+      await removeFromCompletedOrders(orderToRework.id);
+      
+      // Reset state
       setIsReworkModalOpen(false);
       setOrderToRework(null);
       setReworkComponents([]);
       setReworkNotes('');
       
-      // Show success message
-      const message = apiSuccess 
-        ? `Rework order created successfully! Order ID: ${reworkId}` 
-        : `Rework order created locally! Order ID: ${reworkId}`;
-      toast.success(message);
+      toast.success(`Rework order created successfully! ID: ${updatedReworkOrder.displayId}`);
       
     } catch (error) {
       console.error('Error creating rework order:', error);
-      toast.error(`Failed to create rework order: ${error.message}`);
+      toast.error('Failed to create rework order. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Load JsBarcode if needed for barcode display
+  };  // Load JsBarcode if needed for barcode display
   useEffect(() => {
     if (isDetailsModalOpen && selectedCompletedOrder?.serial_number || selectedCompletedOrder?.barcodeNumber) {
       const barcodeValue = selectedCompletedOrder.serial_number || selectedCompletedOrder.barcodeNumber;
@@ -1282,27 +972,6 @@ const Assembly = () => {
         className="flex justify-between items-center mb-4"
       >
         <h2 className="text-2xl font-bold text-gray-800">PCB Assembly Manager</h2>
-        <div className="flex items-center space-x-3">
-          {loading && (
-            <div className="flex items-center text-blue-600">
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span className="text-sm">Syncing data...</span>
-            </div>
-          )}
-          <button
-            onClick={() => refreshAssemblyData(true)}
-            disabled={loading}
-            className="flex items-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh Data
-          </button>
-        </div>
       </motion.div>
 
       <motion.div 
@@ -1494,7 +1163,7 @@ const Assembly = () => {
                           Machine Type
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Progress
+                          Quantity
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Target Date
@@ -1524,24 +1193,17 @@ const Assembly = () => {
                             className="hover:bg-blue-50"
                           >
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              <div className="flex items-center">
-                                {order.product}
-                                {order.is_rework && (
-                                  <div className="ml-2 flex items-center space-x-2">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
-                                      🔄 REWORK
+                              {order.product}
+                              {order.is_rework && (
+                                <div className="mt-1 flex items-center">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                    Rework
+                                  </span>
+                                  {order.original_barcode && (
+                                    <span className="ml-2 text-xs text-gray-500 font-mono">
+                                      Original: {order.original_barcode}
                                     </span>
-                                    {order.rework_type && (
-                                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                        {order.rework_type.replace('_', ' ')}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              {order.is_rework && order.original_work_order_barcode && (
-                                <div className="mt-1 text-xs text-gray-500 font-mono">
-                                  Original: {order.original_work_order_barcode}
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -1637,24 +1299,17 @@ const Assembly = () => {
                             className="hover:bg-green-50"
                           >
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              <div className="flex items-center">
-                                {order.product}
-                                {order.is_rework && (
-                                  <div className="ml-2 flex items-center space-x-2">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
-                                      🔄 REWORK
+                              {order.product}
+                              {order.is_rework && (
+                                <div className="mt-1 flex items-center">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                    Rework
+                                  </span>
+                                  {order.original_barcode && (
+                                    <span className="ml-2 text-xs text-gray-500 font-mono">
+                                      Original: {order.original_barcode}
                                     </span>
-                                    {order.rework_type && (
-                                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                        {order.rework_type.replace('_', ' ')}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              {order.is_rework && order.original_work_order_barcode && (
-                                <div className="mt-1 text-xs text-gray-500 font-mono">
-                                  Original: {order.original_work_order_barcode}
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -1693,114 +1348,6 @@ const Assembly = () => {
                           </motion.tr>
                         ))
                       )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-            
-            {/* Rework Orders - Priority Section */}
-            {reworkOrders.length > 0 && (
-              <div className="mb-8">
-                <h4 className="text-md font-semibold mb-3 text-amber-700 border-b pb-2 flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.996-.833-2.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                  🔄 Priority Rework Orders ({reworkOrders.length})
-                </h4>
-                
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-amber-800">
-                    <strong>Priority:</strong> These orders require immediate attention due to quality issues or component failures.
-                  </p>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white divide-y divide-gray-200 border-l-4 border-amber-400">
-                    <thead className="bg-amber-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
-                          Product & Rework Info
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
-                          Original Barcode
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
-                          PCB Type
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
-                          Rework Reason
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-amber-700 uppercase tracking-wider">
-                          Target Date
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-amber-700 uppercase tracking-wider">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {reworkOrders.map((order, index) => (
-                        <motion.tr 
-                          key={order.id || index}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          className="hover:bg-amber-50 border-l-2 border-amber-300"
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300 mr-3">
-                                🔄 REWORK
-                              </span>
-                              <div>
-                                <div className="font-medium">{order.product}</div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Type: {order.rework_type?.replace('_', ' ') || 'Full Rework'}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                            {order.original_work_order_barcode || 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                              order.pcb_type === 'YBS' 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : 'bg-green-100 text-green-800'
-                            }`}>
-                              {order.pcb_type || 'YBS'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
-                            <div className="truncate">
-                              {order.rework_notes || order.notes || 'Quality issue detected'}
-                            </div>
-                            {order.rework_components && order.rework_components.length > 0 && (
-                              <div className="mt-1 text-xs text-amber-600">
-                                Components: {order.rework_components.length} items
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="text-red-600 font-medium">
-                              {new Date(order.target_date).toLocaleDateString()}
-                            </div>
-                            <div className="text-xs text-red-500">
-                              Priority: HIGH
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button 
-                              onClick={() => handleStartAssembly(order)}
-                              className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded font-medium transition-colors"
-                            >
-                              Start Rework Assembly
-                            </button>
-                          </td>
-                        </motion.tr>
-                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -1871,68 +1418,28 @@ const Assembly = () => {
                           {order.machine_type || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-gray-900">
-                              {order.quantity}
-                            </span>
-                            {order.completed_quantity > 0 && (
-                              <div className="text-xs">
-                                <span className="text-green-600">
-                                  ✓ {order.completed_quantity} completed
-                                </span>
-                                <br />
-                                <span className="text-orange-600">
-                                  ⏳ {(order.quantity - order.completed_quantity)} remaining
-                                </span>
-                              </div>
-                            )}
-                            {order.status === 'In Progress' && (
-                              <div className="mt-1">
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className="bg-blue-600 h-2 rounded-full" 
-                                    style={{ 
-                                      width: `${((order.completed_quantity || 0) / order.quantity) * 100}%` 
-                                    }}
-                                  ></div>
-                                </div>
-                                <span className="text-xs text-gray-600">
-                                  {Math.round(((order.completed_quantity || 0) / order.quantity) * 100)}% complete
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                          {order.quantity}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(order.target_date).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate">
                           {order.is_rework ? (
-                            <div>
-                              <span className="font-medium text-amber-700">Rework Components:</span>
+                            <div>                              <span className="font-medium text-amber-700">Rework Components:</span>
                               <ul className="list-disc ml-4 mt-1 text-xs">
                                 {order.rework_components && order.rework_components.map((comp, i) => (
-                                  <li key={i} className="text-amber-800">{comp}</li>
+                                  <li key={i} className="text-amber-800">
+                                    {typeof comp === 'object' ? 
+                                      (comp.componentName || comp.barcode || 'Unknown Component') : 
+                                      comp
+                                    }
+                                  </li>
                                 ))}
                                 {(!order.rework_components || order.rework_components.length === 0) && 
                                   <li className="text-amber-800">Full assembly rework</li>
                                 }
                               </ul>
                               {order.notes && <p className="mt-1 italic text-xs">{order.notes}</p>}
-                            </div>
-                          ) : order.status === 'In Progress' && order.completed_quantity > 0 ? (
-                            <div>
-                              <span className="font-medium text-blue-700">🔄 Next Unit Needed</span>
-                              <div className="text-xs text-gray-600 mt-1">
-                                <div>Last completed: Unit {order.lastCompletedUnit || order.completed_quantity}</div>
-                                <div>Progress: {order.completed_quantity}/{order.quantity} units</div>
-                                {order.lastCompletedAt && (
-                                  <div>Last: {new Date(order.lastCompletedAt).toLocaleString()}</div>
-                                )}
-                                {order.progress_notes && (
-                                  <div className="italic">{order.progress_notes}</div>
-                                )}
-                              </div>
                             </div>
                           ) : (
                             order.notes || '-'
@@ -1941,20 +1448,10 @@ const Assembly = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button 
                             onClick={() => handleStartAssembly(order)}
-                            className={`px-3 py-1 rounded transition-colors text-white font-medium ${
-                              order.status === 'In Progress' && order.completed_quantity > 0
-                                ? 'bg-orange-500 hover:bg-orange-600' 
-                                : 'bg-blue-500 hover:bg-blue-600'
-                            }`}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition-colors"
                           >
-                            {order.status === 'In Progress' && order.completed_quantity > 0
-                              ? `Continue Unit ${(order.completed_quantity || 0) + 1}`
-                              : order.quantity > 1 
-                                ? `Start Unit 1 of ${order.quantity}`
-                                : 'Start Assembly'
-                            }
-                          </button>
-                        </td>
+                            Start Assembly
+                          </button>                        </td>
                       </motion.tr>
                     ))}
                   </tbody>
@@ -1964,10 +1461,69 @@ const Assembly = () => {
           </div>
         ) : (
           /* Completed Work Orders */
-          <div className="overflow-x-auto">
-            <h4 className="text-md font-semibold mb-3 text-gray-700 border-b pb-2">
-              Completed Assemblies
+          <div>            <h4 className="text-md font-semibold mb-3 text-gray-700 border-b pb-2">
+              Completed Work Orders
             </h4>
+              {/* Date Filter Controls for Completed Work Orders */}
+            <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 mb-2">
+                    Start Date
+                  </label>
+                  <input
+                    id="start-date"
+                    type="date"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 mb-2">
+                    End Date
+                  </label>
+                  <input
+                    id="end-date"
+                    type="date"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleFilterCompletedAssemblies}
+                  disabled={completedAssembliesLoading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center"
+                >
+                  {completedAssembliesLoading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Filtering...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                      </svg>
+                      Apply Filter
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleClearFilters}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  Clear Filters
+                </button>
+              </div>            </div>
+            
+            <div className="overflow-x-auto">
             <table className="min-w-full bg-white divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -2020,9 +1576,8 @@ const Assembly = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {order.item_code}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.serial_number || order.barcodeNumber || 'N/A'}
+                      </td>                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {order.serialNumber || order.barcodeNumber || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <span className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
@@ -2034,7 +1589,7 @@ const Assembly = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.completed_at ? new Date(order.completed_at).toLocaleDateString() : 'N/A'}
+                        {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -2062,11 +1617,11 @@ const Assembly = () => {
                           </button>
                         </div>
                       </td>
-                    </motion.tr>
-                  ))
+                    </motion.tr>                  ))
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         )}
       </motion.div>
@@ -2157,12 +1712,11 @@ const Assembly = () => {
                     <div>
                       <p className="text-sm font-medium text-gray-500">Item Code</p>
                       <p className="text-sm text-gray-900">{selectedCompletedOrder.item_code}</p>
-                    </div>
-                    <div>
+                    </div>                    <div>
                       <p className="text-sm font-medium text-gray-500">Serial/Barcode Number</p>
-                      <p className="text-sm text-gray-900">{selectedCompletedOrder.serial_number || selectedCompletedOrder.barcodeNumber || 'N/A'}</p>
+                      <p className="text-sm text-gray-900">{selectedCompletedOrder.serialNumber || selectedCompletedOrder.barcodeNumber || 'N/A'}</p>
                     </div>
-                    {(selectedCompletedOrder.serial_number || selectedCompletedOrder.barcodeNumber) && (
+                    {(selectedCompletedOrder.serialNumber || selectedCompletedOrder.barcodeNumber) && (
                       <div className="col-span-2 mt-3 text-center">
                         <svg id="barcode-display"></svg>
                       </div>
@@ -2172,9 +1726,8 @@ const Assembly = () => {
                       <p className="text-sm text-gray-900">{detectPcbType(selectedCompletedOrder) || 'Unknown'}</p>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Completion Date</p>
-                      <p className="text-sm text-gray-900">
-                        {selectedCompletedOrder.completed_at ? new Date(selectedCompletedOrder.completed_at).toLocaleString() : 'N/A'}
+                      <p className="text-sm font-medium text-gray-500">Completion Date</p>                      <p className="text-sm text-gray-900">
+                        {selectedCompletedOrder.completedAt ? new Date(selectedCompletedOrder.completedAt).toLocaleString() : 'N/A'}
                       </p>
                     </div>
                     <div>
@@ -2460,8 +2013,7 @@ const Assembly = () => {
                     Cancel
                   </button>
                   <button
-                    type="button"
-                    onClick={createReworkOrder}
+                    type="button"                    onClick={createReworkOrder}
                     className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md shadow-sm hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                   >
                     Create Rework Order
@@ -2475,5 +2027,4 @@ const Assembly = () => {
     </div>
   );
 };
-
 export default Assembly;

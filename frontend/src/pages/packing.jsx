@@ -6,7 +6,7 @@ const Packing = () => {
     window.location.href = "http://localhost:3001";
   }, []);
 
-  // Return a simple loading message while redirecting
+  // Return a simple loading message while redirectingb 
   return (
     <div style={{ 
       display: "flex", 

@@ -111,9 +111,14 @@ export const fetchAssemblyProcesses = async (params = {}) => {
  */
 export const createAssemblyProcess = async (processData) => {
   try {
-    return await api.post(ENDPOINTS.ASSEMBLY_PROCESSES, processData);
+    console.log('Creating assembly process with data:', processData);
+    const response = await api.post(ENDPOINTS.ASSEMBLY_PROCESSES, processData);
+    console.log('Assembly process created successfully:', response);
+    return response;
   } catch (error) {
-    // Error handling logic...
+    console.error('Failed to create assembly process:', error);
+    console.error('Request data was:', processData);
+    console.error('Error response:', error.response?.data);
     throw error;
   }
 };
@@ -145,7 +150,7 @@ export const updateAssemblyProcessStatus = async (id, status) => {
  */
 export const saveCompletedAssemblyToDatabase = async (assemblyData) => {
   try {
-    const response = await fetch('/api/completed-assemblies/', {
+    const response = await fetch('/api/assembly-process/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -175,12 +180,23 @@ export const saveCompletedAssemblyToDatabase = async (assemblyData) => {
 };
 
 /**
- * Fetch completed assemblies
+ * Fetch completed assemblies with optional filtering
+ * Fetches from assembly-process endpoint with status=completed to include both RSM and YBS
+ * @param {string} queryParams - URL query parameters for filtering
  * @returns {Promise<Object>} - List of completed assemblies
  */
-export const getCompletedAssemblies = async () => {
+export const getCompletedAssemblies = async (queryParams = '') => {
   try {
-    const response = await api.get('/api/completed-assemblies/list/');
+    // Build URL with status=completed filter and additional query params
+    const statusParam = 'status=completed';
+    const fullParams = queryParams ? `${statusParam}&${queryParams}` : statusParam;
+    const url = `/api/assembly-process/?${fullParams}`;
+    
+    console.log('Fetching completed assemblies from:', url);
+    const response = await api.get(url);
+    
+    // Log the response to help with debugging
+    console.log('Completed assemblies response:', response);
     return response;
   } catch (error) {
     console.error('Error fetching completed assemblies:', error);

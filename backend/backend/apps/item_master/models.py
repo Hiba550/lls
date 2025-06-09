@@ -84,6 +84,9 @@ class AssemblyProcess(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     created_by = models.CharField(max_length=100)
     notes = models.TextField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    barcode_number = models.CharField(max_length=100, blank=True, null=True)
+    current_sensor_index = models.IntegerField(default=1)
     
     def __str__(self):
         return f"Assembly Process for {self.item.item_code} (SN: {self.serial_number})"
@@ -104,6 +107,7 @@ class AssemblyLog(models.Model):
 class ScannedPart(models.Model):
     assembly_process = models.ForeignKey(AssemblyProcess, on_delete=models.CASCADE, related_name='scanned_parts')
     part_code = models.CharField(max_length=100)
+    sensor_id = models.IntegerField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     scan_time = models.DateTimeField(auto_now_add=True)
     operator = models.CharField(max_length=100)

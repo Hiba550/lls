@@ -1,13 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from django.contrib import admin  # Import the admin module
-from .views import ItemMasterViewSet, AssemblyProcessViewSet, BOMComponentViewSet, PCBItemViewSet
+from .views import ItemMasterViewSet, BOMComponentViewSet, PCBItemViewSet
 from django.conf import settings
 from django.conf.urls.static import static
 
 router = DefaultRouter()
 router.register(r'item-master', ItemMasterViewSet)
-router.register(r'assembly-process', AssemblyProcessViewSet)
 router.register(r'bom-components', BOMComponentViewSet)
 router.register(r'pcb-items', PCBItemViewSet)
 

@@ -94,11 +94,10 @@ export default function AppRoutes() {
         <Route path="/" element={<Layout />}>
           {/* Dashboard */}
           <Route index element={<Dashboard />} />
-          
-          {/* Assembly Routes */}
+            {/* Assembly Routes */}
           <Route path="assembly">
             <Route index element={<Assembly />} />
-            <Route path="YBS">
+            <Route path="ybs">
               <Route index element={<YBSAssemblyManager />} />
               <Route path=":itemCode" element={<YBSAssemblyView />} />
             </Route>

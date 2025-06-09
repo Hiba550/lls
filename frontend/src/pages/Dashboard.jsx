@@ -32,25 +32,52 @@ const Dashboard = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        setError(null);
-
-        // Fetch real data from APIs
+        setError(null);        // Fetch real data from APIs
         const [workOrders, items] = await Promise.all([
           fetchWorkOrders(),
           fetchItemMaster()
         ]);
 
-        // Calculate dashboard statistics from real data
-        const totalWorkOrders = Array.isArray(workOrders) ? workOrders.length : 0;
-        const pendingWorkOrders = Array.isArray(workOrders) 
-          ? workOrders.filter(wo => wo.status === 'Pending').length 
-          : 0;
-        const inProgressWorkOrders = Array.isArray(workOrders) 
-          ? workOrders.filter(wo => wo.status === 'In Progress').length 
-          : 0;
-        const completedWorkOrders = Array.isArray(workOrders) 
-          ? workOrders.filter(wo => wo.status === 'Completed').length 
-          : 0;
+        // Also include localStorage work orders (including rework orders)
+        const localStorageKeys = ['workOrders', 'pendingWorkOrders', 'pendingAssemblies'];
+        const localWorkOrders = [];
+        
+        localStorageKeys.forEach(key => {
+          try {
+            const orders = JSON.parse(localStorage.getItem(key) || '[]');
+            const pendingLocalOrders = orders.filter(order => 
+              order.status === 'Pending' || !order.status
+            );
+            
+            pendingLocalOrders.forEach(localOrder => {
+              // Check if this order is not already in the API results
+              const existsInApi = Array.isArray(workOrders) && workOrders.some(apiOrder => 
+                apiOrder.id === localOrder.id || 
+                apiOrder.id === localOrder.api_work_order_id
+              );
+              
+              if (!existsInApi) {
+                localWorkOrders.push({
+                  ...localOrder,
+                  id: localOrder.id || `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  source: 'localStorage',
+                  status: 'Pending'
+                });
+              }
+            });
+          } catch (error) {
+            console.warn(`Failed to parse localStorage key ${key}:`, error);
+          }
+        });
+
+        // Merge API and localStorage work orders for statistics
+        const allWorkOrders = [...(Array.isArray(workOrders) ? workOrders : []), ...localWorkOrders];
+
+        // Calculate dashboard statistics from merged data
+        const totalWorkOrders = allWorkOrders.length;
+        const pendingWorkOrders = allWorkOrders.filter(wo => wo.status === 'Pending').length;
+        const inProgressWorkOrders = allWorkOrders.filter(wo => wo.status === 'In Progress').length;
+        const completedWorkOrders = allWorkOrders.filter(wo => wo.status === 'Completed').length;
         const itemsInInventory = Array.isArray(items) ? items.length : 0;
         const completedAssemblies = completedWorkOrders;
         const rejectedItems = Math.floor(totalWorkOrders * 0.05); 
@@ -70,12 +97,10 @@ const Dashboard = () => {
           pendingQA,
           inProgressAssemblies,
           assembliesLastWeek
-        });
-
-        // Get recent work orders for the table (most recent 5)
-        if (Array.isArray(workOrders)) {
-          const sorted = [...workOrders]
-            .sort((a, b) => new Date(b.created_at || b.target_date) - new Date(a.created_at || a.target_date))
+        });        // Get recent work orders for the table (most recent 5) from merged data
+        if (allWorkOrders.length > 0) {
+          const sorted = [...allWorkOrders]
+            .sort((a, b) => new Date(b.created_at || b.target_date || b.rework_date || Date.now()) - new Date(a.created_at || a.target_date || a.rework_date || Date.now()))
             .slice(0, 5);
           setRecentWorkOrders(sorted);
         }

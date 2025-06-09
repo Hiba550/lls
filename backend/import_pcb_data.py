@@ -122,12 +122,21 @@ def process_pcb_data(data_str):
     }
 
 def main():
-    print("Starting PCB data import...")
-    result = process_pcb_data(pcb_data)
-    print(f"Import completed. Created: {result['created']}, Updated: {result['updated']}, Total: {result['total']}")
-    print("PCB items in the database:")
-    for item in result['items']:
-        print(f"- {item.item_code}: {item.name} ({item.category})")
+    print("🚀 Starting PCB data import...")
+    print("=" * 50)
+    try:
+        result = process_pcb_data(pcb_data)
+        print("=" * 50)
+        print(f"✅ Import completed successfully!")
+        print(f"📊 Results: Created: {result['created']}, Updated: {result['updated']}, Total: {result['total']}")
+        print("\n📋 PCB items now in the database:")
+        for item in result['items']:
+            print(f"   - {item.item_code}: {item.name} ({item.category})")
+        print("=" * 50)
+    except Exception as e:
+        print(f"❌ Error during import: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     main()

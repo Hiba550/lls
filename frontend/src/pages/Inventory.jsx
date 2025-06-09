@@ -21,15 +21,12 @@ const Inventory = () => {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showViewDetails, setShowViewDetails] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-
   // Add this function somewhere in your component
-  const checkAvailableEndpoints = async () => {
-    try {
-      // Try different potential API roots
+  const checkAvailableEndpoints = async () => {    try {
+      // Try different potential API roots - removing /api/ to avoid 401 errors
       const potentialEndpoints = [
-        '/api/',
         '/api/item-master/',
-        '/api/item-master/bom-components/'
+        '/api/bom-components/'
       ];
       
       for (const endpoint of potentialEndpoints) {
@@ -63,19 +60,8 @@ const Inventory = () => {
       console.log("API response successful:", data);
       
       setItems(Array.isArray(data) ? data : []);
-      setError(null);
-    } catch (error) {
+      setError(null);    } catch (error) {
       console.error('Error fetching items:', error);
-      
-      // Try to identify the correct endpoint
-      console.log("Trying alternative endpoints for debugging...");
-      try {
-        const response = await axios.get('/api'); // Try to get API root
-        console.log("API root endpoints:", response.data);
-      } catch (rootError) {
-        console.error("Couldn't access API root:", rootError);
-      }
-      
       setError('Failed to load inventory items. Please try again.');
       setItems([]);
     } finally {

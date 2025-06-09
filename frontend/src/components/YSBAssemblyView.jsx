@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { fetchAssemblyProcesses } from '../api/assemblyApi';
+import { getWorkOrder } from '../api/workOrderApi';
 
 const YSBAssemblyView = () => {
   const { itemCode } = useParams();
@@ -10,13 +10,14 @@ const YSBAssemblyView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [assemblyData, setAssemblyData] = useState(null);
-  
-  // Get parameters from query string
+    // Get parameters from query string
   const searchParams = new URLSearchParams(location.search);
   const workOrderId = searchParams.get('workOrderId');
   const assemblyId = searchParams.get('assemblyId') || searchParams.get('id'); // Check for both assemblyId and id
   
-  useEffect(() => {
+  // The assemblyId is actually the workOrderId in our system
+  const actualWorkOrderId = workOrderId || assemblyId;
+    useEffect(() => {
     const fetchAssemblyData = async () => {
       try {
         // Validate that we have required parameters
@@ -26,8 +27,8 @@ const YSBAssemblyView = () => {
           return;
         }
         
-        if (!assemblyId) {
-          setError('No assembly ID provided');
+        if (!actualWorkOrderId) {
+          setError('No work order ID provided');
           setLoading(false);
           return;
         }
@@ -35,19 +36,39 @@ const YSBAssemblyView = () => {
         // Log information to help with debugging
         console.log('Loading YBS Assembly with:', {
           itemCode,
-          assemblyId,
-          workOrderId
+          workOrderId: actualWorkOrderId
         });
         
-        // Fetch assembly data from API
-        const assemblies = await fetchAssemblyProcesses();
-        const assembly = assemblies.find(a => a.id.toString() === assemblyId.toString());
+        // Fetch work order data from API which contains all assembly details
+        const workOrder = await getWorkOrder(actualWorkOrderId);
         
-        if (!assembly) {
-          throw new Error(`Assembly with ID ${assemblyId} not found`);
+        if (!workOrder) {
+          throw new Error(`Work order with ID ${actualWorkOrderId} not found`);
         }
         
-        setAssemblyData(assembly);
+        // Transform work order data to assembly data format
+        const assemblyData = {
+          id: workOrder.id,
+          item_code: workOrder.item_code,
+          product: workOrder.product,
+          serial_number: workOrder.assembly_barcode,
+          barcode_number: workOrder.assembly_barcode,
+          completion_date: workOrder.completed_at,
+          completed_by: workOrder.completed_by,
+          scanned_components: workOrder.scanned_components || [],
+          component_scan_data: workOrder.component_scan_data || {},
+          status: workOrder.status,
+          quantity: workOrder.quantity,
+          completed_quantity: workOrder.completed_quantity,
+          description: workOrder.description,
+          machine_no: workOrder.machine_no,
+          customer_name: workOrder.customer_name,
+          quality_notes: workOrder.quality_notes,
+          assembly_start_time: workOrder.assembly_start_time,
+          assembly_duration_seconds: workOrder.assembly_duration_seconds
+        };
+        
+        setAssemblyData(assemblyData);
         setLoading(false);
       } catch (err) {
         console.error('Failed to load assembly data:', err);
@@ -57,7 +78,7 @@ const YSBAssemblyView = () => {
     };
     
     fetchAssemblyData();
-  }, [itemCode, assemblyId, workOrderId]);
+  }, [itemCode, actualWorkOrderId]);
   
   if (loading) {
     return (
@@ -123,20 +144,31 @@ const YSBAssemblyView = () => {
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-lg font-semibold mb-3">Assembly Information</h3>
-            <table className="min-w-full">
+            <h3 className="text-lg font-semibold mb-3">Assembly Information</h3>            <table className="min-w-full">
               <tbody>
                 <tr>
-                  <td className="py-2 pr-4 font-medium text-gray-700">Serial Number:</td>
-                  <td className="py-2">{assemblyData?.serial_number || '-'}</td>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Product:</td>
+                  <td className="py-2">{assemblyData?.product || '-'}</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Item Code:</td>
+                  <td className="py-2">{assemblyData?.item_code || '-'}</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Serial/Barcode:</td>
+                  <td className="py-2">
+                    <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                      {assemblyData?.serial_number || assemblyData?.barcode_number || 'N/A'}
+                    </span>
+                  </td>
                 </tr>
                 <tr>
                   <td className="py-2 pr-4 font-medium text-gray-700">Status:</td>
                   <td className="py-2">
                     <span className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
-                      assemblyData?.status === 'completed' 
+                      assemblyData?.status === 'Completed' 
                         ? 'bg-green-100 text-green-800' 
-                        : assemblyData?.status === 'in_progress'
+                        : assemblyData?.status === 'In Progress'
                         ? 'bg-blue-100 text-blue-800'
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
@@ -145,52 +177,63 @@ const YSBAssemblyView = () => {
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-2 pr-4 font-medium text-gray-700">Created By:</td>
-                  <td className="py-2">{assemblyData?.created_by || '-'}</td>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Completed By:</td>
+                  <td className="py-2">{assemblyData?.completed_by || '-'}</td>
                 </tr>
                 <tr>
-                  <td className="py-2 pr-4 font-medium text-gray-700">Created Date:</td>
-                  <td className="py-2">{assemblyData?.created_at ? new Date(assemblyData.created_at).toLocaleString() : '-'}</td>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Completion Date:</td>
+                  <td className="py-2">{assemblyData?.completion_date ? new Date(assemblyData.completion_date).toLocaleString() : '-'}</td>
                 </tr>
                 <tr>
-                  <td className="py-2 pr-4 font-medium text-gray-700">Work Order:</td>
-                  <td className="py-2">#{workOrderId || assemblyData?.work_order?.id || '-'}</td>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Work Order ID:</td>
+                  <td className="py-2">#{actualWorkOrderId || '-'}</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Machine No:</td>
+                  <td className="py-2">{assemblyData?.machine_no || '-'}</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-4 font-medium text-gray-700">Customer:</td>
+                  <td className="py-2">{assemblyData?.customer_name || '-'}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Assembly Progress</h3>
+            <div>
+            <h3 className="text-lg font-semibold mb-3">Work Order Progress</h3>
             <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-blue-500" 
-                style={{ width: `${assemblyData?.status === 'completed' ? 100 : assemblyData?.status === 'in_progress' ? 50 : 10}%` }}
+                style={{ width: `${assemblyData?.status === 'Completed' ? 100 : assemblyData?.status === 'In Progress' ? 50 : 10}%` }}
               ></div>
             </div>
             <div className="mt-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-md">
-                  <div className="text-xl font-semibold">{assemblyData?.scanned_parts?.length || 0}</div>
-                  <div className="text-xs text-gray-500">Parts Scanned</div>
+                  <div className="text-xl font-semibold">{assemblyData?.scanned_components?.length || 0}</div>
+                  <div className="text-xs text-gray-500">Components Scanned</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-md">
-                  <div className="text-xl font-semibold">{assemblyData?.current_sensor_index || 1}</div>
-                  <div className="text-xs text-gray-500">Current Sensor</div>
+                  <div className="text-xl font-semibold">{assemblyData?.completed_quantity || 0}/{assemblyData?.quantity || 0}</div>
+                  <div className="text-xs text-gray-500">Units Completed</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 rounded-md">
-                  <div className="text-xl font-semibold text-blue-600">{assemblyData?.status === 'completed' ? '100%' : assemblyData?.status === 'in_progress' ? '50%' : '10%'}</div>
-                  <div className="text-xs text-gray-500">Completion</div>
+                  <div className="text-xl font-semibold">
+                    {assemblyData?.assembly_duration_seconds 
+                      ? Math.floor(assemblyData.assembly_duration_seconds / 60) + 'm'
+                      : '-'
+                    }
+                  </div>
+                  <div className="text-xs text-gray-500">Assembly Time</div>
                 </div>
-              </div>
-            </div>
+              </div>            </div>
           </div>
         </div>
       </div>
       
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Scanned Parts</h3>
+          <h3 className="text-lg font-semibold">Scanned Components</h3>
           <button 
             className="text-blue-600 hover:text-blue-800"
             onClick={redirectToMainDashboard}
@@ -198,27 +241,24 @@ const YSBAssemblyView = () => {
             Manage in Assembly Dashboard →
           </button>
         </div>
-        
-        {assemblyData?.scanned_parts?.length > 0 ? (
+          {assemblyData?.scanned_components?.length > 0 ? (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Code</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sensor ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component Barcode</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scan Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operator</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {assemblyData.scanned_parts.map((part, index) => (
+              {assemblyData.scanned_components.map((component, index) => (
                 <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{part.part_code}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{part.sensor_id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {part.created_at ? new Date(part.created_at).toLocaleString() : '-'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 bg-gray-50">
+                    {component}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{part.operator}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {assemblyData.completion_date ? new Date(assemblyData.completion_date).toLocaleString() : '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">
                       Verified
@@ -230,7 +270,14 @@ const YSBAssemblyView = () => {
           </table>
         ) : (
           <div className="text-center py-8 text-gray-500">
-            No parts scanned yet.
+            No components scanned yet.
+          </div>
+        )}
+        
+        {assemblyData?.quality_notes && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <h4 className="font-semibold text-blue-800 mb-2">Quality Notes</h4>
+            <p className="text-blue-700">{assemblyData.quality_notes}</p>
           </div>
         )}
       </div>
