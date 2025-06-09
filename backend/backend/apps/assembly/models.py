@@ -116,3 +116,21 @@ class CompletedAssembly(models.Model):
     
     class Meta:
         ordering = ['-completed_at']
+
+class AssemblyOperationLog(models.Model):
+    """Comprehensive logging for all assembly operations"""
+    assembly_id = models.CharField(max_length=100)
+    action = models.CharField(max_length=100)
+    details = models.JSONField(default=dict)  # Store complex details as JSON
+    operator = models.CharField(max_length=100)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['assembly_id', '-timestamp']),
+            models.Index(fields=['action', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.action} - {self.assembly_id} at {self.timestamp}"

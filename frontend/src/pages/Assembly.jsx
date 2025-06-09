@@ -338,62 +338,205 @@ const Assembly = () => {
     }
   };
 
+  // Enhanced completion function with comprehensive logging and barcode management
   const completeAssembly = async () => {
     try {
       setLoading(true);
       
-      // Prepare the completed data with all component details
+      // Generate consistent barcode numbers
+      const workOrderBarcodeNumber = selectedOrder.barcodeNumber || 
+        selectedOrder.workOrderBarcodeNumber || 
+        generateBarcodeNumber();
+      const assemblyBarcodeNumber = serialNumber || 
+        generateSerialNumber(selectedOrder.product);
+      
+      // Prepare comprehensive completed data with enhanced tracking
       const completedData = {
+        id: selectedOrder.id,
         workOrder: selectedOrder.id,
-        serialNumber,
+        workOrderBarcodeNumber: workOrderBarcodeNumber,
+        assemblyBarcodeNumber: assemblyBarcodeNumber,
+        serialNumber: assemblyBarcodeNumber,
+        barcodeNumber: workOrderBarcodeNumber,
+        product: selectedOrder.product,
+        item_code: selectedOrder.item_code,
+        pcb_type: detectPcbType(selectedOrder),
+        scannedComponents: scannedParts.map(part => ({
+          barcode: part.partCode,
+          componentName: part.componentName || part.partCode,
+          itemCode: part.itemCode || part.partCode,
+          scanTime: part.scanTime,
+          operator: part.operator,
+          replaced: part.replaced || false,
+          replaceReason: part.replaceReason || null,
+          replacedWith: part.replacedWith || null,
+          replaceTime: part.replaceTime || null,
+          sensorId: part.sensorId || null
+        })),
         parts: scannedParts,
         completedAt: new Date().toISOString(),
+        completedBy: 'Current User', // In real app, get from auth context
+        status: 'Completed',
         is_rework: selectedOrder.is_rework || false,
         original_assembly_id: selectedOrder.original_assembly_id || null,
         reworked: selectedOrder.reworked || false,
         reworked_components: selectedOrder.rework_components || [],
-        barcodeNumber: selectedOrder.barcodeNumber || generateBarcodeNumber()
+        previous_components: selectedOrder.previous_components || [],
+        rework_notes: selectedOrder.rework_notes || '',
+        zone: selectedOrder.zone || 'Assembly',
+        // Enhanced completion metadata
+        completion_metadata: {
+          totalComponents: scannedParts.length,
+          replacedComponents: scannedParts.filter(part => part.replaced).length,
+          assemblyDuration: Date.now() - (selectedOrder.startTime || Date.now()),
+          qualityChecks: true,
+          operator: 'Current User',
+          workstation: 'Assembly-01',
+          completionTimestamp: new Date().toISOString()
+        }
       };
       
-      // Save to API or localStorage
+      // Log completion details for debugging
+      console.log('Completing assembly with enhanced data:', completedData);
+      
+      // Try enhanced API endpoint first
+      let savedToAPI = false;
       try {
-        const response = await fetch('/api/completed-assemblies/', {
+        const response = await fetch('/api/assembly/enhanced-completed-assemblies/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(completedData)
         });
         
-        if (!response.ok) throw new Error('Failed to save to API');
+        if (response.ok) {
+          const result = await response.json();
+          savedToAPI = true;
+          console.log('Assembly data saved to enhanced API successfully:', result);
+          
+          // Update barcode numbers from API response if provided
+          if (result.work_order_barcode) {
+            completedData.workOrderBarcodeNumber = result.work_order_barcode;
+          }
+          if (result.assembly_barcode) {
+            completedData.assemblyBarcodeNumber = result.assembly_barcode;
+          }
+        } else {
+          throw new Error(`Enhanced API returned ${response.status}: ${response.statusText}`);
+        }
         
       } catch (apiError) {
-        console.error('API error:', apiError);
-        // Fallback to localStorage
+        console.warn('Enhanced API unavailable, trying fallback API:', apiError);
+        
+        // Fallback to original API
+        try {
+          const fallbackResponse = await fetch('/api/assembly/completed-assemblies/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(completedData)
+          });
+          
+          if (fallbackResponse.ok) {
+            savedToAPI = true;
+            console.log('Assembly data saved to fallback API successfully');
+          } else {
+            throw new Error(`Fallback API returned ${fallbackResponse.status}`);
+          }
+        } catch (fallbackError) {
+          console.error('Both APIs failed:', fallbackError);
+          toast.warning('APIs unavailable, saving locally');
+        }
+      }
+      
+      // Always save to localStorage for backup and offline capability
+      try {
+        const completedWorkOrders = JSON.parse(localStorage.getItem('completedWorkOrders') || '[]');
         const assemblyCompletedOrders = JSON.parse(localStorage.getItem('assemblyCompletedOrders') || '[]');
-        assemblyCompletedOrders.push(completedData);
-        localStorage.setItem('assemblyCompletedOrders', JSON.stringify(assemblyCompletedOrders));
+        
+        // Remove duplicates and add new entry
+        const filteredCompletedOrders = completedWorkOrders.filter(order => order.id !== selectedOrder.id);
+        const filteredAssemblyOrders = assemblyCompletedOrders.filter(order => order.id !== selectedOrder.id);
+        
+        filteredCompletedOrders.push(completedData);
+        filteredAssemblyOrders.push(completedData);
+        
+        localStorage.setItem('completedWorkOrders', JSON.stringify(filteredCompletedOrders));
+        localStorage.setItem('assemblyCompletedOrders', JSON.stringify(filteredAssemblyOrders));
+        
+        console.log('Assembly data saved to localStorage successfully');
+      } catch (storageError) {
+        console.error('localStorage save failed:', storageError);
+        toast.error('Failed to save assembly data locally');
+      }
+      
+      // Update assembly process status in API
+      if (selectedOrder.assemblyProcessId) {
+        try {
+          await updateAssemblyProcessStatus(selectedOrder.assemblyProcessId, 'completed');
+        } catch (err) {
+          console.error('Failed to update assembly process status:', err);
+        }
       }
       
       // Update the local state
       const updatedPending = workOrders.filter(order => order.id !== selectedOrder.id);
-      const updatedOrder = {...selectedOrder, status: 'Completed'};
+      const updatedOrder = {
+        ...selectedOrder, 
+        status: 'Completed',
+        completedAt: completedData.completedAt,
+        workOrderBarcodeNumber: workOrderBarcodeNumber,
+        assemblyBarcodeNumber: assemblyBarcodeNumber,
+        scannedComponents: completedData.scannedComponents,
+        completion_metadata: completedData.completion_metadata
+      };
       
       setWorkOrders(updatedPending);
       setCompletedOrders([...completedOrders, updatedOrder]);
       
-      // Reset and show success
+      // Reset form state
       setSelectedOrder(null);
       setScannedParts([]);
       setSerialNumber('');
       setIsCompleteModalOpen(false);
-      toast.success('Assembly completed successfully!');
       
-      // Reload for state refresh
+      // Show success message with enhanced details
+      const message = savedToAPI 
+        ? `Assembly completed successfully! Work Order: ${workOrderBarcodeNumber}, Assembly: ${assemblyBarcodeNumber}` 
+        : `Assembly completed and saved locally! Work Order: ${workOrderBarcodeNumber}, Assembly: ${assemblyBarcodeNumber}`;
+      toast.success(message);
+      
+      // Create comprehensive completion log
+      const logEntry = {
+        action: 'ASSEMBLY_COMPLETED',
+        workOrderId: selectedOrder.id,
+        workOrderBarcode: workOrderBarcodeNumber,
+        assemblyBarcode: assemblyBarcodeNumber,
+        pcbType: detectPcbType(selectedOrder),
+        componentCount: scannedParts.length,
+        replacedComponentCount: scannedParts.filter(part => part.replaced).length,
+        timestamp: new Date().toISOString(),
+        savedToAPI: savedToAPI,
+        operator: 'Current User',
+        workstation: 'Assembly-01',
+        completionMetadata: completedData.completion_metadata
+      };
+      
+      // Store completion log with enhanced data
+      const completionLogs = JSON.parse(localStorage.getItem('assemblyCompletionLogs') || '[]');
+      completionLogs.push(logEntry);
+      // Keep only last 1000 logs to prevent storage overflow
+      if (completionLogs.length > 1000) {
+        completionLogs.splice(0, completionLogs.length - 1000);
+      }
+      localStorage.setItem('assemblyCompletionLogs', JSON.stringify(completionLogs));
+      
+      // Reload for state refresh after delay
       setTimeout(() => {
         window.location.reload();
-      }, 1500);
+      }, 2000);
+      
     } catch (err) {
       console.error('Failed to complete assembly:', err);
-      toast.error('Failed to complete assembly. Please try again.');
+      toast.error(`Failed to complete assembly: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -440,6 +583,234 @@ const Assembly = () => {
       toast.error('Failed to assign PCB type. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Enhanced component barcode update function
+  const updateComponentBarcode = async (assemblyId, oldBarcode, newBarcode, reason) => {
+    try {
+      setLoading(true);
+      
+      // Try enhanced API endpoint first
+      let savedToAPI = false;
+      try {
+        const response = await fetch('/api/assembly/update-component-barcode/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assembly_id: assemblyId,
+            old_barcode: oldBarcode,
+            new_barcode: newBarcode,
+            reason: reason,
+            operator: 'Current User'
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          savedToAPI = true;
+          console.log('Component barcode updated via enhanced API:', result);
+          
+          toast.success(`Component barcode updated: ${oldBarcode} → ${newBarcode}`);
+          
+          // Update local state
+          const updatedCompletedOrders = completedOrders.map(order => {
+            if (order.id === assemblyId) {
+              const updatedComponents = order.scannedComponents?.map(comp => {
+                if (comp.barcode === oldBarcode) {
+                  return {
+                    ...comp,
+                    previous_barcode: oldBarcode,
+                    barcode: newBarcode,
+                    replacement_reason: reason,
+                    replacement_time: new Date().toISOString(),
+                    replaced_by: 'Current User'
+                  };
+                }
+                return comp;
+              }) || [];
+              
+              return {
+                ...order,
+                scannedComponents: updatedComponents,
+                // Maintain same work order barcode consistency
+                workOrderBarcodeNumber: result.work_order_barcode || order.workOrderBarcodeNumber,
+                assemblyBarcodeNumber: result.assembly_barcode || order.assemblyBarcodeNumber
+              };
+            }
+            return order;
+          });
+          
+          setCompletedOrders(updatedCompletedOrders);
+          
+          // Update localStorage
+          localStorage.setItem('assemblyCompletedOrders', JSON.stringify(updatedCompletedOrders));
+          
+        } else {
+          throw new Error(`API returned ${response.status}: ${response.statusText}`);
+        }
+        
+      } catch (apiError) {
+        console.error('Enhanced API failed:', apiError);
+        toast.warning('API unavailable, updating locally only');
+        
+        // Update locally without API
+        const updatedCompletedOrders = completedOrders.map(order => {
+          if (order.id === assemblyId) {
+            const updatedComponents = order.scannedComponents?.map(comp => {
+              if (comp.barcode === oldBarcode) {
+                return {
+                  ...comp,
+                  previous_barcode: oldBarcode,
+                  barcode: newBarcode,
+                  replacement_reason: reason,
+                  replacement_time: new Date().toISOString(),
+                  replaced_by: 'Current User'
+                };
+              }
+              return comp;
+            }) || [];
+            
+            return {
+              ...order,
+              scannedComponents: updatedComponents
+            };
+          }
+          return order;
+        });
+        
+        setCompletedOrders(updatedCompletedOrders);
+        localStorage.setItem('assemblyCompletedOrders', JSON.stringify(updatedCompletedOrders));
+        toast.success(`Component barcode updated locally: ${oldBarcode} → ${newBarcode}`);
+      }
+      
+      // Log the component update
+      const logEntry = {
+        action: 'COMPONENT_BARCODE_UPDATED',
+        assemblyId: assemblyId,
+        oldBarcode: oldBarcode,
+        newBarcode: newBarcode,
+        reason: reason,
+        timestamp: new Date().toISOString(),
+        operator: 'Current User',
+        savedToAPI: savedToAPI
+      };
+      
+      const componentUpdateLogs = JSON.parse(localStorage.getItem('componentUpdateLogs') || '[]');
+      componentUpdateLogs.push(logEntry);
+      localStorage.setItem('componentUpdateLogs', JSON.stringify(componentUpdateLogs));
+      
+    } catch (error) {
+      console.error('Error updating component barcode:', error);
+      toast.error(`Failed to update component barcode: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Enhanced logging utility for comprehensive audit trail
+  const createAuditLog = (action, details, additionalData = {}) => {
+    const logEntry = {
+      id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: action,
+      details: details,
+      timestamp: new Date().toISOString(),
+      operator: 'Current User',
+      workstation: 'Assembly-01',
+      ...additionalData
+    };
+    
+    try {
+      const auditLogs = JSON.parse(localStorage.getItem('assemblyAuditLogs') || '[]');
+      auditLogs.push(logEntry);
+      
+      // Keep only last 5000 logs to prevent storage overflow
+      if (auditLogs.length > 5000) {
+        auditLogs.splice(0, auditLogs.length - 5000);
+      }
+      
+      localStorage.setItem('assemblyAuditLogs', JSON.stringify(auditLogs));
+      console.log('Audit log created:', logEntry);
+    } catch (error) {
+      console.error('Failed to create audit log:', error);
+    }
+  };
+
+  // Enhanced barcode generation with consistency tracking
+  const generateConsistentBarcodes = (pcbType = 'YBS') => {
+    const workOrderBarcode = generateBarcodeNumber();
+    const assemblyBarcode = generateSerialNumber(`${pcbType} Assembly`);
+    
+    // Store barcode mapping for consistency
+    const barcodeMapping = {
+      workOrderBarcode: workOrderBarcode,
+      assemblyBarcode: assemblyBarcode,
+      pcbType: pcbType,
+      generatedAt: new Date().toISOString(),
+      generatedBy: 'Current User'
+    };
+    
+    try {
+      const barcodeMappings = JSON.parse(localStorage.getItem('barcodeMappings') || '[]');
+      barcodeMappings.push(barcodeMapping);
+      localStorage.setItem('barcodeMappings', JSON.stringify(barcodeMappings));
+    } catch (error) {
+      console.error('Failed to store barcode mapping:', error);
+    }
+    
+    return barcodeMapping;
+  };
+
+  // Enhanced work order status management
+  const updateWorkOrderStatus = async (workOrderId, newStatus, additionalData = {}) => {
+    try {
+      const statusUpdate = {
+        workOrderId: workOrderId,
+        newStatus: newStatus,
+        previousStatus: workOrders.find(order => order.id === workOrderId)?.status || 'Unknown',
+        timestamp: new Date().toISOString(),
+        updatedBy: 'Current User',
+        ...additionalData
+      };
+      
+      // Create audit log for status change
+      createAuditLog('WORK_ORDER_STATUS_UPDATED', statusUpdate);
+      
+      // Update local state
+      const updatedWorkOrders = workOrders.map(order => {
+        if (order.id === workOrderId) {
+          return {
+            ...order,
+            status: newStatus,
+            lastStatusUpdate: statusUpdate.timestamp,
+            statusHistory: [...(order.statusHistory || []), statusUpdate]
+          };
+        }
+        return order;
+      });
+      
+      setWorkOrders(updatedWorkOrders);
+      
+      // Try to update via API
+      try {
+        const response = await fetch(`/api/work-orders/${workOrderId}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (response.ok) {
+          console.log('Work order status updated in API successfully');
+        } else {
+          throw new Error(`API returned ${response.status}`);
+        }
+      } catch (apiError) {
+        console.warn('Failed to update work order status in API:', apiError);
+      }
+      
+    } catch (error) {
+      console.error('Error updating work order status:', error);
+      toast.error(`Failed to update work order status: ${error.message}`);
     }
   };
 
@@ -541,20 +912,22 @@ const Assembly = () => {
     }
   };
 
+  // Enhanced rework order creation with improved tagging and barcode consistency
   const createReworkOrder = async () => {
     try {
       setLoading(true);
       
-      // Create a new work order for rework
+      // Create a new work order for rework with enhanced details
       const reworkId = `RW-${orderToRework.id}-${Date.now().toString().substring(8)}`;
       
       // Get PCB type
       const pcbType = detectPcbType(orderToRework);
 
-      // Add original barcode to rework order
-      const originalBarcode = orderToRework.serial_number || orderToRework.barcodeNumber;
+      // Preserve original barcode numbers for consistency
+      const originalWorkOrderBarcode = orderToRework.barcodeNumber || orderToRework.workOrderBarcodeNumber;
+      const originalAssemblyBarcode = orderToRework.serial_number || orderToRework.assemblyBarcodeNumber;
 
-      // Create rework order for API
+      // Create comprehensive rework order
       const reworkOrder = {
         id: reworkId,
         original_assembly_id: orderToRework.id,
@@ -564,53 +937,177 @@ const Assembly = () => {
         priority: 'high',
         status: 'Pending',
         created_at: new Date().toISOString(),
-        notes: reworkNotes || 'Rework needed',
+        notes: reworkNotes || 'Rework needed - quality issues detected',
         is_rework: true,
+        rework_tag: '🔄 REWORK REQUIRED',
+        rework_type: reworkComponents.length > 0 ? 'COMPONENT_REPLACEMENT' : 'FULL_REWORK',
         rework_components: reworkComponents.length > 0 
-          ? reworkComponents.map(c => c.componentName || c.barcode)
-          : ['All components'],
+          ? reworkComponents.map(c => ({
+              barcode: c.barcode || c.componentName,
+              componentName: c.componentName || c.barcode,
+              reason: c.reason || 'Quality issue',
+              detectedAt: new Date().toISOString()
+            }))
+          : [{
+              barcode: 'ALL_COMPONENTS',
+              componentName: 'All Components',
+              reason: 'Full assembly rework required',
+              detectedAt: new Date().toISOString()
+            }],
         pcb_type: pcbType,
-        original_barcode: originalBarcode,
-        barcode_to_use: originalBarcode
+        // Preserve original barcode numbers for consistency
+        original_work_order_barcode: originalWorkOrderBarcode,
+        original_assembly_barcode: originalAssemblyBarcode,
+        // Rework will use the same work order barcode but may get new assembly barcode
+        barcode_to_use: originalWorkOrderBarcode,
+        assembly_barcode_to_use: originalAssemblyBarcode,
+        // Store previous component data for reference
+        previous_components: orderToRework.scannedComponents || [],
+        // Rework metadata
+        rework_metadata: {
+          reworkInitiatedBy: 'Current User',
+          reworkInitiatedAt: new Date().toISOString(),
+          originalCompletedAt: orderToRework.completedAt,
+          reworkReason: reworkNotes,
+          estimatedReworkTime: '30 minutes',
+          qualityIssueType: reworkComponents.length > 0 ? 'Component Failure' : 'Assembly Issue'
+        },
+        // Visual indicators for UI
+        ui_indicators: {
+          isRework: true,
+          reworkBadge: 'REWORK',
+          reworkColor: '#f59e0b', // amber color
+          priorityLevel: 'HIGH'
+        },
+        zone: orderToRework.zone || 'Assembly',
+        target_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Due tomorrow
       };
 
-      reworkOrder.previous_components = orderToRework.scannedComponents
-        ? orderToRework.scannedComponents.filter(comp => 
-            reworkComponents.some(rc => rc.barcode === comp.barcode || rc.componentName === comp.componentName)
-          )
-        : [];
+      // Store components that need to be replaced
+      if (reworkComponents.length > 0) {
+        reworkOrder.previous_components = orderToRework.scannedComponents
+          ? orderToRework.scannedComponents.filter(comp => 
+              reworkComponents.some(rc => rc.barcode === comp.barcode || rc.componentName === comp.componentName)
+            )
+          : [];
+      }
       
-      // Try API call first
+      console.log('Creating rework order:', reworkOrder);
+      
+      // Try enhanced API endpoint first
+      let savedToAPI = false;
       try {
-        // Make API call to create rework order
-        const response = await fetch('/api/work-orders/', {
+        // Make API call to enhanced rework order endpoint
+        const response = await fetch('/api/assembly/enhanced-rework-order/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(reworkOrder)
+          body: JSON.stringify({
+            original_assembly_id: orderToRework.id,
+            item_code: orderToRework.item_code,
+            pcb_type: pcbType,
+            rework_components: reworkComponents,
+            rework_notes: reworkNotes,
+            original_work_order_barcode: originalWorkOrderBarcode,
+            original_assembly_barcode: originalAssemblyBarcode,
+            initiated_by: 'Current User'
+          })
         });
         
-        if (!response.ok) throw new Error('API call failed');
+        if (response.ok) {
+          const result = await response.json();
+          savedToAPI = true;
+          console.log('Rework order saved to enhanced API successfully:', result);
+          
+          // Update rework order with API response data
+          if (result.rework_order_data) {
+            Object.assign(reworkOrder, result.rework_order_data);
+          }
+        } else {
+          throw new Error(`Enhanced API returned ${response.status}: ${response.statusText}`);
+        }
         
-        toast.success('Rework order created successfully!');
       } catch (apiError) {
-        console.error('API error:', apiError);
+        console.warn('Enhanced API unavailable, trying fallback API:', apiError);
         
-        // Fallback to local storage
+        // Fallback to original work orders API
+        try {
+          const fallbackResponse = await fetch('/api/work-orders/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reworkOrder)
+          });
+          
+          if (fallbackResponse.ok) {
+            savedToAPI = true;
+            console.log('Rework order saved to fallback API successfully');
+            toast.success('Rework order created successfully in system!');
+          } else {
+            throw new Error(`API returned ${response.status}: ${response.statusText}`);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback API error:', fallbackError);
+          toast.warning('API unavailable, creating rework order locally');
+        }
+      }
+      
+      // Always save to localStorage for backup and offline capability
+      try {
         const pendingWorkOrders = JSON.parse(localStorage.getItem('pendingWorkOrders') || '[]');
-        pendingWorkOrders.push(reworkOrder);
-        localStorage.setItem('pendingWorkOrders', JSON.stringify(pendingWorkOrders));
+        const workOrdersBackup = JSON.parse(localStorage.getItem('workOrdersBackup') || '[]');
         
-        toast.info('Rework order created in local storage (API unavailable)');
+        // Remove any existing rework orders for this assembly
+        const filteredPending = pendingWorkOrders.filter(order => 
+          order.original_assembly_id !== orderToRework.id
+        );
+        const filteredBackup = workOrdersBackup.filter(order => 
+          order.original_assembly_id !== orderToRework.id
+        );
+        
+        filteredPending.push(reworkOrder);
+        filteredBackup.push(reworkOrder);
+        
+        localStorage.setItem('pendingWorkOrders', JSON.stringify(filteredPending));
+        localStorage.setItem('workOrdersBackup', JSON.stringify(filteredBackup));
+        
+        console.log('Rework order saved to localStorage successfully');
+      } catch (storageError) {
+        console.error('localStorage save failed:', storageError);
+        toast.error('Failed to save rework order locally');
       }
       
       // Remove from completed orders
       removeFromCompletedOrders(orderToRework.id);
+      
+      // Log rework creation for audit trail
+      const reworkLog = {
+        action: 'REWORK_ORDER_CREATED',
+        originalAssemblyId: orderToRework.id,
+        reworkOrderId: reworkId,
+        reworkReason: reworkNotes,
+        componentsToRework: reworkComponents.length > 0 ? reworkComponents.length : 'ALL',
+        originalWorkOrderBarcode: originalWorkOrderBarcode,
+        originalAssemblyBarcode: originalAssemblyBarcode,
+        createdBy: 'Current User',
+        timestamp: new Date().toISOString(),
+        savedToAPI: savedToAPI
+      };
+      
+      // Store rework log
+      const reworkLogs = JSON.parse(localStorage.getItem('reworkLogs') || '[]');
+      reworkLogs.push(reworkLog);
+      localStorage.setItem('reworkLogs', JSON.stringify(reworkLogs));
 
       // Close modal and reset state
       setIsReworkModalOpen(false);
       setOrderToRework(null);
       setReworkComponents([]);
       setReworkNotes('');
+      
+      // Show success message with rework details
+      const message = savedToAPI 
+        ? `Rework order created successfully! Order ID: ${reworkId}` 
+        : `Rework order created locally! Order ID: ${reworkId}`;
+      toast.success(message);
       
       // Refresh work orders list
       setTimeout(() => {
@@ -619,7 +1116,7 @@ const Assembly = () => {
       
     } catch (error) {
       console.error('Error creating rework order:', error);
-      toast.error('Failed to create rework order.');
+      toast.error(`Failed to create rework order: ${error.message}`);
     } finally {
       setLoading(false);
     }

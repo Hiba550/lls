@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RSM Assembly - 5RS011076</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
     <style>
         :root {
             --left-pcb-color: #b5e6b5;
@@ -925,8 +927,24 @@
                 }
             });
             
-            completeButton.addEventListener('click', function() {
-                completeAssembly();
+            completeButton.addEventListener('click', async () => {
+                // disable to prevent double‐click
+                completeButton.disabled = true;
+                console.log('🟢 Complete button clicked');
+                try {
+                    // Optional: log entry at start
+                    addLogEntry('Invoking completeAssembly()', 'info');
+                    const success = await completeAssembly();
+                    if (!success) {
+                        // if your fn returns false on error, re‑enable
+                        completeButton.disabled = false;
+                    }
+                } catch (err) {
+                    console.error('Error in completeAssembly:', err);
+                    showNotification(`Error: ${err.message}`, 'error');
+                    // allow retry
+                    completeButton.disabled = false;
+                }
             });
             
             // Add this event listener
@@ -1188,86 +1206,143 @@ console.log(`Classes: ${nextComponent.element.className}`);
         });
 
         async function completeAssembly() {
-            // Check if all components are scanned
-            const allScanned = Object.values(componentMapping).every(comp => comp.scanned);
+            // 1) Ensure all parts scanned
+            const allScanned = Object.values(componentMapping).every(c => c.scanned);
             if (!allScanned) {
                 showNotification('Cannot complete: some components are not scanned', 'error');
                 return;
             }
-            
             if (!assemblyId) {
                 showNotification('Error: No assembly ID found', 'error');
                 completeButton.disabled = false;
                 return false;
             }
-            
-            try {
-                // Show processing message
-                showNotification('Processing...', 'info');
-                addLogEntry('Completing assembly process...', 'info');
-                
-                // Prepare data for submission
-                const assemblyData = {
+
+            showNotification('Processing…', 'info');
+            addLogEntry('Completing assembly process…', 'info');
+
+            // 2) Generate final assembly barcode
+            const finalAssemblyBarcode = generateAssemblyBarcode();
+            addLogEntry(`Generated Assembly Barcode: ${finalAssemblyBarcode}`, 'info');
+
+            // 3) Build scanned‐components payload
+            const scannedDetails = Object.values(componentMapping)
+                .filter(c => c.scanned)
+                .map(c => ({
+                    component_id: c.index,
+                    name: c.name,
+                    barcode: c.scannedBarcode,
+                    scan_time: new Date().toISOString()
+                }));
+
+            // 4) PATCH assembly‐process → completed
+            await fetch(`${API_URL}/assembly-process/${assemblyId}/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     status: 'completed',
                     completed_at: new Date().toISOString(),
-                    notes: 'Assembly completed via RSM assembly interface',
-                    operator: 'Current User',
-                    metadata: {
-                        scanned_components: Array.from(scannedBarcodes).map((barcode, index) => ({
-                            component_id: `comp_${index}`,
-                            barcode: barcode,
-                            scan_time: new Date().toISOString()
-                        }))
-                    }
-                };
-                
-                // Make the API call with proper error handling
-                const response = await fetch(`/api/assembly-process/${assemblyId}/`, {
+                    barcode_number: finalAssemblyBarcode,
+                    metadata: { scanned_components: scannedDetails }
+                })
+            });
+
+            // 5) POST to CompletedAssemblies
+            await fetch(`${API_URL}/completed-assemblies/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assembly_id: assemblyId,
+                    barcode_number: finalAssemblyBarcode,
+                    scanned_components: scannedDetails
+                })
+            });
+
+            // === NEW: persist to localStorage completed list ===
+            const completedKey = 'assemblyCompletedOrders';
+            const assemblyEntry = {
+                id: assemblyId,
+                status: 'Completed',
+                product: `RSM Assembly`,
+                item_code: window.location.pathname
+                    .split('/')
+                    .pop()
+                    .replace('.html',''),
+                serial_number: finalAssemblyBarcode,
+                pcb_type: 'RSM',
+                completed_at: new Date().toISOString(),
+                hasCompletedAssembly: true,
+                reworked: false,
+                reworkedComponents: []
+            };
+            const completedList = JSON.parse(localStorage.getItem(completedKey) || '[]');
+            completedList.push(assemblyEntry);
+            localStorage.setItem(completedKey, JSON.stringify(completedList));
+
+            // 6) Move from pending → completed list
+            moveWorkOrderToCompleted(assemblyId);
+
+            // 7) Show completion summary + rework
+            showCompletionScreen(scannedDetails, finalAssemblyBarcode);
+            return true;
+        }
+
+        // Helper: 11‑digit barcode with '1' at pos‑5 and '4' at pos‑6
+        function generateAssemblyBarcode() {
+            const p = Math.random().toString().slice(2,6).padStart(4,'0');
+            const s = Math.random().toString().slice(2,7).padStart(5,'0');
+            return p + '14' + s;
+        }
+
+        // Function to render barcode
+        function renderBarcode(elementId, barcodeValue) {
+            const svg = document.getElementById(elementId);
+            if (!svg) return;
+            JsBarcode(svg, barcodeValue, {
+                format: 'CODE128',
+                displayValue: true,
+                width: 2,
+                height: 50
+            });
+        }
+
+        // Show summary + “Rework” action
+        function showCompletionScreen(parts, assemblyBarcode) {
+            const c = document.getElementById('mainContainer');
+            c.innerHTML = `
+              <div style="text-align:center;padding:2rem">
+                <h2 style="color:#16a34a;">Assembly Completed!</h2>
+                <p>Assembly ID: ${assemblyId}</p>
+                <h3>Components</h3>
+                <ul id="partsList"></ul>
+                <h3>Final Barcode</h3>
+                <svg id="finalAssemblyBarcode"></svg>
+                <button id="reworkBtn" style="margin‑top:1rem;background:#f59e0b;color:white;padding:.5rem 1rem;border:none;border-radius:.375rem;cursor:pointer;">
+                  Rework
+                </button>
+              </div>`;
+            parts.forEach(p => {
+                const li = document.createElement('li');
+                li.textContent = `${p.name}: ${p.barcode}`;
+                if (p.replaced) li.style.background = '#fee2e2';
+                document.getElementById('partsList').appendChild(li);
+            });
+            renderBarcode('finalAssemblyBarcode', assemblyBarcode);
+
+            document.getElementById('reworkBtn').onclick = async () => {
+                const reason = prompt('Enter rework reason:');
+                if (!reason) return;
+                // Flag as reworked
+                await fetch(`${API_URL}/completed-assemblies/${assemblyId}/`, {
                     method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(assemblyData)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reworked: true, rework_notes: reason })
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to complete assembly: ${response.status} ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                
-                // Success - show notification and redirect
-                showNotification('Assembly completed successfully!', 'success');
-                addLogEntry('Assembly completed successfully!', 'success');
-                
-                // Clear localStorage on completion
-                localStorage.removeItem('currentRSMAssemblyId');
-                
-                // Offer to start a new assembly or return to list
-                setTimeout(() => {
-                    document.getElementById('mainContainer').innerHTML = `
-                        <div style="text-align: center; padding: 2rem">
-                            <h2 style="color: #16a34a; margin-bottom: 1rem">Assembly Completed Successfully!</h2>
-                            <p style="margin-bottom: 2rem">Assembly ID: ${assemblyId}</p>
-                            <div style="display: flex; gap: 1rem; justify-content: center">
-                                <button onclick="window.location.href='/assembly/rsm'"
-                                        style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
-                                               border: none; border-radius: 0.375rem; cursor: pointer;">
-                                    Return to Assembly List
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                }, 1000);
-                
-                return true;
-            } catch (error) {
-                console.error('Error completing assembly:', error);
-                showNotification(`Failed to complete assembly: ${error.message}`, 'error');
-                addLogEntry(`Error: ${error.message}`, 'error');
-                completeButton.disabled = false;
-                return false;
-            }
+                // Move back to pending
+                moveWorkOrderToPending(assemblyId);
+                alert('Sent for rework');
+                window.location.href = '/assembly/rsm';
+            };
         }
 
         function showApiFailureMessage() {
@@ -1313,6 +1388,25 @@ console.log(`Classes: ${nextComponent.element.className}`);
             
             inventoryDataLoaded = false;
         }
+
+          // …existing code…
+        
+          // Helper: Move a work‐order from pending → completed in localStorage
+          function moveWorkOrderToCompleted(id) {
+            const pendingKey   = 'pendingRSMAssemblies';
+            const completedKey = 'completedRSMAssemblies';
+            const pending   = JSON.parse(localStorage.getItem(pendingKey)   || '[]');
+            const completed = JSON.parse(localStorage.getItem(completedKey) || '[]');
+            const idx = pending.findIndex(rec => rec.id === id);
+            if (idx > -1) {
+              const [record] = pending.splice(idx, 1);
+              completed.push(record);
+              localStorage.setItem(pendingKey,   JSON.stringify(pending));
+              localStorage.setItem(completedKey, JSON.stringify(completed));
+            }
+          }
+        
+        
 
         async function restartAssembly() {
             if (confirm("Are you sure you want to restart this assembly? All current progress will be lost.")) {
@@ -1462,6 +1556,7 @@ console.log(`Classes: ${nextComponent.element.className}`);
     </script>
 </head>
 <body>
+    <div id="notification" class="notification"></div>
     <div class="container" id="mainContainer">
         <div class="header">
             <div class="part-id">5RS011076 <br> 3Slave <br> 75 mm</div>

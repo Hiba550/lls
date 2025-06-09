@@ -1,9 +1,10 @@
-M\5RS011112.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
     <title>RSM Assembly - 5RS011112</title>
     <style>
         :root {
@@ -1130,86 +1131,107 @@ M\5RS011112.html -->
         }
 
         async function completeAssembly() {
-            // Check if all components are scanned
-            const allScanned = Object.values(componentMapping).every(comp => comp.scanned);
+            const allScanned = Object.values(componentMapping).every(c => c.scanned);
             if (!allScanned) {
                 showNotification('Cannot complete: some components are not scanned', 'error');
                 return;
             }
-            
             if (!assemblyId) {
-                showNotification('Error: No assembly ID found', 'error');
+                showNotification('Error: No assembly ID', 'error');
                 completeButton.disabled = false;
                 return false;
             }
-            
-            try {
-                // Show processing message
-                showNotification('Processing...', 'info');
-                addLogEntry('Completing assembly process...', 'info');
-                
-                // Prepare data for submission
-                const assemblyData = {
+
+            showNotification('Processing…', 'info');
+            addLogEntry('Completing…', 'info');
+
+            // 1) gen final barcode
+            const finalAssemblyBarcode = generateAssemblyBarcode();
+            addLogEntry(`Generated: ${finalAssemblyBarcode}`, 'info');
+
+            // 2) collect scans
+            const scannedDetails = Object.values(componentMapping)
+                .filter(c => c.scanned)
+                .map(c => ({
+                    component_id: c.index,
+                    name: c.name,
+                    barcode: c.scannedBarcode,
+                    scan_time: new Date().toISOString()
+                }));
+
+            // 3) PATCH → completed
+            await fetch(`${API_URL}/assembly-process/${assemblyId}/`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     status: 'completed',
                     completed_at: new Date().toISOString(),
-                    notes: 'Assembly completed via RSM assembly interface',
-                    operator: 'Current User',
-                    metadata: {
-                        scanned_components: Array.from(scannedBarcodes).map((barcode, index) => ({
-                            component_id: `comp_${index}`,
-                            barcode: barcode,
-                            scan_time: new Date().toISOString()
-                        }))
-                    }
-                };
-                
-                // Make the API call with proper error handling
-                const response = await fetch(`/api/assembly-process/${assemblyId}/`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(assemblyData)
+                    barcode_number: finalAssemblyBarcode,
+                    metadata: { scanned_components: scannedDetails }
+                })
+            });
+
+            // 4) POST to CompletedAssemblies
+            await fetch(`${API_URL}/completed-assemblies/`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assembly_id: assemblyId,
+                    barcode_number: finalAssemblyBarcode,
+                    scanned_components: scannedDetails
+                })
+            });
+
+            // 5) persist locally + move lists
+            const key = 'assemblyCompletedOrders';
+            const list = JSON.parse(localStorage.getItem(key) || '[]');
+            list.push({
+                id: assemblyId,
+                barcode_number: finalAssemblyBarcode,
+                scanned_components: scannedDetails,
+                completed_at: new Date().toISOString(),
+                reworked: false
+            });
+            localStorage.setItem(key, JSON.stringify(list));
+            moveWorkOrderToCompleted(assemblyId);
+
+            // 6) show summary + Rework
+            showCompletionScreen(scannedDetails, finalAssemblyBarcode);
+            return true;
+        }
+
+        // helper: pos5='1', pos6='8'
+        function generateAssemblyBarcode() {
+            const p = Math.random().toString().slice(2, 6).padStart(4, '0');
+            const s = Math.random().toString().slice(2, 7).padStart(5, '0');
+            return p + '18' + s;
+        }
+
+        // render summary + rework
+        function showCompletionScreen(parts, assemblyBarcode) {
+            const c = document.getElementById('mainContainer');
+            c.innerHTML = `
+                <div style="text-align:center;padding:2rem">
+                    <h2 style="color:#16a34a">Completed!</h2>
+                    <p>Assembly #${assemblyId}</p>
+                    <h3>Components</h3><ul id="partsList"></ul>
+                    <h3>Final Barcode</h3><svg id="finalAssemblyBarcode"></svg>
+                    <button id="reworkBtn" style="margin-top:1rem;background:#f59e0b;color:#fff;padding:.5rem 1rem;">Rework</button>
+                </div>`;
+            parts.forEach(p => {
+                const li = document.createElement('li');
+                li.textContent = `${p.name}: ${p.barcode}`;
+                if (p.replaced) li.style.background = '#fee2e2';
+                document.getElementById('partsList').append(li);
+            });
+            renderBarcode('finalAssemblyBarcode', assemblyBarcode);
+            document.getElementById('reworkBtn').onclick = async () => {
+                const reason = prompt('Rework reason:'); if (!reason) return;
+                await fetch(`${API_URL}/completed-assemblies/${assemblyId}/`, {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reworked: true, rework_notes: reason })
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to complete assembly: ${response.status} ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                
-                // Success - show notification and redirect
-                showNotification('Assembly completed successfully!', 'success');
-                addLogEntry('Assembly completed successfully!', 'success');
-                
-                // Clear localStorage on completion
-                localStorage.removeItem('currentRSMAssemblyId');
-                
-                // Offer to start a new assembly or return to list
-                setTimeout(() => {
-                    document.getElementById('mainContainer').innerHTML = `
-                        <div style="text-align: center; padding: 2rem">
-                            <h2 style="color: #16a34a; margin-bottom: 1rem">Assembly Completed Successfully!</h2>
-                            <p style="margin-bottom: 2rem">Assembly ID: ${assemblyId}</p>
-                            <div style="display: flex; gap: 1rem; justify-content: center">
-                                <button onclick="window.location.href='/assembly/rsm'"
-                                        style="background: #3b82f6; color: white; padding: 0.75rem 1.5rem; 
-                                               border: none; border-radius: 0.375rem; cursor: pointer;">
-                                    Return to Assembly List
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                }, 1000);
-                
-                return true;
-            } catch (error) {
-                console.error('Error completing assembly:', error);
-                showNotification(`Failed to complete assembly: ${error.message}`, 'error');
-                addLogEntry(`Error: ${error.message}`, 'error');
-                completeButton.disabled = false;
-                return false;
-            }
+                moveWorkOrderToPending(assemblyId);
+                alert('Sent for rework'); location.href = '/assembly/rsm';
+            };
         }
 
         async function restartAssembly() {

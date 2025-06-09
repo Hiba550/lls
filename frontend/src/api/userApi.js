@@ -130,6 +130,15 @@ const userApi = {
   },
 
   /**
+   * Force logout a user (admin only)
+   * @param {number} userId - ID of user to force logout
+   * @returns {Promise} Success message
+   */
+  async forceLogout(userId) {
+    return apiClient.post(`/api/users/${userId}/force-logout/`);
+  },
+
+  /**
    * Get current user profile
    * @returns {Promise} User profile data
    */

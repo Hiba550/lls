@@ -17,17 +17,27 @@ function Profile() {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const response = await userApi.getCurrentUser();
-        setUser(response.data);
+        // Try to get profile from the profile endpoint first
+        let profileResponse;
+        try {
+          profileResponse = await userApi.getProfile();
+        } catch (profileError) {
+          console.warn('Profile endpoint failed, trying getCurrentUser:', profileError);
+          // Fallback to getCurrentUser if profile endpoint fails
+          profileResponse = await userApi.getCurrentUser();
+        }
+        
+        const userData = profileResponse.data || profileResponse;
+        setUser(userData);
         setFormData({
-          full_name: response.data.full_name || '',
-          email: response.data.email || '',
-          department: response.data.department || '',
-          phone_number: response.data.phone_number || ''
+          full_name: userData.full_name || '',
+          email: userData.email || '',
+          department: userData.department || '',
+          phone_number: userData.phone_number || ''
         });
       } catch (err) {
         console.error('Failed to load profile:', err);
-        setError('Failed to load your profile data.');
+        setError('Failed to load your profile data. The profile service may be temporarily unavailable.');
       } finally {
         setLoading(false);
       }

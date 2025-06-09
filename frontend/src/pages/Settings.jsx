@@ -19,7 +19,11 @@ const Settings = () => {
     user_type: '',
     avatar: '',
     department: '',
-    phone_number: ''
+    phone_number: '',
+    employee_id: '',
+    emergency_contact: {},
+    notes: '',
+    supervisor: null
   });
   
   // Notification settings
@@ -50,7 +54,14 @@ const Settings = () => {
     department: '',
     user_type: 'operator',
     phone_number: '',
-    is_active: true
+    employee_id: '',
+    emergency_contact: {},
+    notes: '',
+    supervisor: null,
+    is_active: true,
+    status: 'active',
+    force_password_change: false,
+    two_factor_enabled: false
   });
 
   // Password change state
@@ -65,47 +76,81 @@ const Settings = () => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
-        const [profileData, preferencesData] = await Promise.all([
-          userApi.getProfile(),
-          userApi.getPreferences()
-        ]);
         
-        setUserProfile({
-          full_name: profileData.full_name || '',
-          email: profileData.email || '',
-          user_type: profileData.user_type || '',
-          avatar: profileData.avatar || '',
-          department: profileData.department || '',
-          phone_number: profileData.phone_number || ''
-        });
-        
-        if (preferencesData) {
-          // Set notifications if available
-          if (preferencesData.notification_preferences) {
-            setNotifications(preferencesData.notification_preferences);
-          }
+        // Load profile data with error handling
+        let profileData = null;
+        try {
+          profileData = await userApi.getProfile();
           
-          // Set other preferences if available
-          if (preferencesData.app_preferences) {
-            setPreferences(preferencesData.app_preferences);
+          setUserProfile({
+            full_name: profileData.full_name || '',
+            email: profileData.email || '',
+            user_type: profileData.user_type || '',
+            avatar: profileData.avatar || '',
+            department: profileData.department || '',
+            phone_number: profileData.phone_number || '',
+            employee_id: profileData.employee_id || '',
+            emergency_contact: profileData.emergency_contact || {},
+            notes: profileData.notes || '',
+            supervisor: profileData.supervisor || null
+          });
+        } catch (profileError) {
+          console.error('Error loading profile:', profileError);
+          // Set default values if profile fails to load
+          setUserProfile({
+            full_name: currentUser?.full_name || '',
+            email: currentUser?.email || '',
+            user_type: currentUser?.user_type || '',
+            avatar: currentUser?.avatar || '',
+            department: currentUser?.department || '',
+            phone_number: currentUser?.phone_number || '',
+            employee_id: currentUser?.employee_id || '',
+            emergency_contact: currentUser?.emergency_contact || {},
+            notes: currentUser?.notes || '',
+            supervisor: currentUser?.supervisor || null
+          });
+          toast.error('Failed to load profile data. Some features may not work correctly.');
+        }
+        
+        // Load preferences with error handling
+        try {
+          const preferencesData = await userApi.getPreferences();
+          if (preferencesData) {
+            // Set notifications if available
+            if (preferencesData.notification_preferences) {
+              setNotifications(preferencesData.notification_preferences);
+            }
+            
+            // Set other preferences if available
+            if (preferencesData.app_preferences) {
+              setPreferences(preferencesData.app_preferences);
+            }
           }
+        } catch (prefError) {
+          console.error('Error loading preferences:', prefError);
+          // Continue with default preferences
         }
 
         // If user is admin, fetch all users
         if (isAdmin) {
-          const usersData = await userApi.getAllUsers();
-          setUsers(usersData);
+          try {
+            const usersData = await userApi.getAllUsers();
+            setUsers(usersData);
+          } catch (usersError) {
+            console.error('Error loading users:', usersError);
+            toast.error('Failed to load user list.');
+          }
         }
       } catch (error) {
-        toast.error('Failed to load settings. Please try again later.');
         console.error('Error loading settings:', error);
+        toast.error('Failed to load settings. Please refresh the page.');
       } finally {
         setLoading(false);
       }
     };
     
     fetchUserData();
-  }, [isAdmin]);
+  }, [isAdmin, currentUser]);
   
   // Handle notification toggle
   const handleNotificationChange = (setting) => {
@@ -292,7 +337,14 @@ const Settings = () => {
         department: '',
         user_type: 'operator',
         phone_number: '',
-        is_active: true
+        employee_id: '',
+        emergency_contact: {},
+        notes: '',
+        supervisor: null,
+        is_active: true,
+        status: 'active',
+        force_password_change: false,
+        two_factor_enabled: false
       });
       
       toast.success('User created successfully');
@@ -316,7 +368,14 @@ const Settings = () => {
       department: user.department || '',
       user_type: user.user_type || 'operator',
       phone_number: user.phone_number || '',
-      is_active: user.is_active
+      employee_id: user.employee_id || '',
+      emergency_contact: user.emergency_contact || {},
+      notes: user.notes || '',
+      supervisor: user.supervisor || null,
+      is_active: user.is_active,
+      status: user.status || 'active',
+      force_password_change: user.force_password_change || false,
+      two_factor_enabled: user.two_factor_enabled || false
     });
     
     setShowUserModal(true);

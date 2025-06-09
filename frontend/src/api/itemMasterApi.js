@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL, API_CONFIG, buildApiUrl } from '../utils/apiConfig.js';
 
 // Configure axios to handle cookies (needed for CSRF)
 axios.defaults.withCredentials = true;
@@ -36,8 +37,8 @@ const getHeaders = (contentType = 'application/json') => {
   };
 };
 
+// Use dynamic API base URL instead of hardcoded '/api'
 // Remove the version number from the API URL since it's not used in your backend
-const API_BASE_URL = '/api';
 
 // Mock data for development when API is not available
 const MOCK_ITEMS = [
@@ -116,7 +117,7 @@ export const createItem = async (data) => {
     // Log what we're sending for debugging
     console.log('Creating item with data:', Object.fromEntries(data.entries()));
     
-    const response = await axios.post('/api/item-master/', data, {
+    const response = await axios.post(`${API_BASE_URL}/item-master/`, data, {
       headers: getHeaders('multipart/form-data')
     });
     return response.data;

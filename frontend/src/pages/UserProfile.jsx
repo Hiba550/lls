@@ -33,7 +33,25 @@ const UserProfile = () => {
               'Authorization': `Bearer ${localStorage.getItem('authToken')}`
             }
           });
-          if (!response.ok) throw new Error('Failed to fetch user data');
+          
+          if (!response.ok) {
+            // If profile endpoint fails, try to use auth context data or show error
+            if (response.status === 500) {
+              toast.error('Profile service is temporarily unavailable. Some features may not work correctly.');
+              // Use any available auth data
+              if (currentUser) {
+                setUserProfile({
+                  full_name: currentUser.full_name || '',
+                  email: currentUser.email || '',
+                  department: currentUser.department || '',
+                  phone_number: currentUser.phone_number || '',
+                  avatar: currentUser.avatar || null
+                });
+              }
+              return;
+            }
+            throw new Error('Failed to fetch user data');
+          }
           
           const userData = await response.json();
           setUserProfile({
@@ -45,7 +63,7 @@ const UserProfile = () => {
           });
         } catch (error) {
           console.error('Error fetching user profile:', error);
-          toast.error('Failed to load user profile');
+          toast.error('Failed to load user profile. Please try refreshing the page.');
         } finally {
           setLoading(false);
         }

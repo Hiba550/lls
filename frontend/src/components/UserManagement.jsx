@@ -41,15 +41,19 @@ const UserManagement = () => {
       fetchUsers();
     }
   }, [isAdmin]);
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const response = await userApi.getAllUsers();
-      setUsers(response.data || []);
+      const usersData = response.data || response;
+      setUsers(Array.isArray(usersData) ? usersData : []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      toast.error('Failed to load users');
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message ||
+                          'Failed to load users. Please try again.';
+      toast.error(errorMessage);
+      setUsers([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -69,7 +73,6 @@ const UserManagement = () => {
       }));
     }
   };
-
   const validateForm = () => {
     const errors = {};
     
@@ -81,8 +84,8 @@ const UserManagement = () => {
     }
     
     // Full name validation
-    if (!userFormData.full_name) {
-      errors.full_name = 'Full name is required';
+    if (!userFormData.full_name || userFormData.full_name.trim().length < 2) {
+      errors.full_name = 'Full name is required and must be at least 2 characters';
     }
     
     // Password validation
@@ -97,10 +100,15 @@ const UserManagement = () => {
       errors.password_confirm = 'Passwords do not match';
     }
     
+    // User type validation
+    const validUserTypes = ['admin', 'planner', 'worker'];
+    if (!validUserTypes.includes(userFormData.user_type)) {
+      errors.user_type = 'Please select a valid user type';
+    }
+    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
-
   const handleCreateUser = async (e) => {
     e.preventDefault();
     
@@ -115,7 +123,8 @@ const UserManagement = () => {
       delete userData.password_confirm;
 
       const response = await userApi.createUser(userData);
-      setUsers(prev => [...prev, response.data]);
+      const newUser = response.data || response;
+      setUsers(prev => [...prev, newUser]);
       setShowUserModal(false);
       
       // Reset form
@@ -129,12 +138,29 @@ const UserManagement = () => {
         phone_number: '',
         is_active: true
       });
+      setFormErrors({});
       
       toast.success('User created successfully');
     } catch (error) {
       console.error('Error creating user:', error);
-      toast.error('Failed to create user: ' + 
-                  (error.response?.data?.detail || error.message || 'Please try again.'));
+      
+      // Handle specific error types
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        if (errorData.email) {
+          setFormErrors(prev => ({ ...prev, email: errorData.email[0] || 'Email error' }));
+        }
+        if (errorData.password) {
+          setFormErrors(prev => ({ ...prev, password: errorData.password[0] || 'Password error' }));
+        }
+        
+        const errorMessage = errorData.detail || 
+                            errorData.non_field_errors?.[0] ||
+                            'Failed to create user. Please check the form for errors.';
+        toast.error(errorMessage);
+      } else {
+        toast.error('Failed to create user. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

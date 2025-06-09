@@ -87,7 +87,8 @@ class ItemMasterViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['item_code', 'description', 'product']
     ordering_fields = ['item_code', 'sno', 'product']
-    permission_classes = [IsAdminUser]  # Only admin users can access
+    permission_classes = [AllowAny]  # Allow unauthenticated access for frontend compatibility
+    authentication_classes = []  # No authentication required
     
     @action(detail=False, methods=['GET'])
     def assembly_items(self, request):

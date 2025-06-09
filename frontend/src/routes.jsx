@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import NotFound from './components/NotFound';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import Packing from './pages/packing';
 
 // Main pages
 import Assembly from './pages/Assembly';
@@ -132,6 +133,8 @@ export default function AppRoutes() {
           
           {/* Settings */}
           <Route path="settings" element={<Settings />} />
+          <Route path="packing" element={<Packing />} />
+          
           
           {/* Search Results */}
           <Route path="search" element={<WorkOrders isSearchResults={true} />} />
