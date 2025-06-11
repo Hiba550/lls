@@ -21,7 +21,6 @@ class ItemMaster(models.Model):
     rev_reason = models.TextField(blank=True, null=True)
     rev_no = models.IntegerField(default=0)
     customer_complaint_info = models.TextField(blank=True, null=True)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     def __str__(self):
         return f"{self.item_code} - {self.description}"

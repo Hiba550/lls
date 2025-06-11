@@ -26,11 +26,21 @@ class WorkOrder(models.Model):
     )
     description = models.TextField()
     quantity = models.IntegerField()
+    completed_quantity = models.IntegerField(default=0)  # Track completed units
     machine_no = models.CharField(max_length=50, blank=True, null=True)
     customer_name = models.CharField(max_length=100, blank=True, null=True)
     target_date = models.DateField()
     released_by = models.CharField(max_length=100)
     remarks = models.TextField(blank=True, null=True)
+    is_rework = models.BooleanField(default=False)  # Flag for rework orders
+    original_work_order = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='rework_orders')
+    rework_notes = models.TextField(blank=True, null=True)
+    priority = models.CharField(max_length=20, choices=[
+        ('low', 'Low'),
+        ('normal', 'Normal'),
+        ('high', 'High'),
+        ('urgent', 'Urgent')
+    ], default='normal')
     status = models.CharField(max_length=20, choices=[
         ('Pending', 'Pending'),
         ('In Progress', 'In Progress'),
@@ -42,6 +52,39 @@ class WorkOrder(models.Model):
 
     def __str__(self):
         return f"{self.product} - {self.item_code}"
+
+    @property
+    def remaining_quantity(self):
+        """Calculate remaining quantity to be completed"""
+        return max(0, self.quantity - self.completed_quantity)
+    
+    @property
+    def completion_percentage(self):
+        """Calculate completion percentage"""
+        if self.quantity == 0:
+            return 0
+        return (self.completed_quantity / self.quantity) * 100
+    
+    @property
+    def is_fully_completed(self):
+        """Check if all units have been completed"""
+        return self.completed_quantity >= self.quantity
+    
+    def can_complete_unit(self):
+        """Check if another unit can be completed"""
+        return self.completed_quantity < self.quantity
+    
+    def complete_unit(self):
+        """Mark one unit as completed and update status"""
+        if self.can_complete_unit():
+            self.completed_quantity += 1
+            if self.is_fully_completed:
+                self.status = 'Completed'
+            elif self.completed_quantity > 0:
+                self.status = 'In Progress'
+            self.save()
+            return True
+        return False
 
     def save(self, *args, **kwargs):
         """Override save method to automatically set PCB type based on item code prefix"""

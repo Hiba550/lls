@@ -109,21 +109,29 @@ class UserViewSet(viewsets.ModelViewSet):
         """Log in a user and return authentication tokens"""
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data.get('email')
+            employee_id = serializer.validated_data.get('employee_id')
             password = serializer.validated_data.get('password')
-            user = authenticate(request, email=email, password=password)
             
-            if user:
-                refresh = RefreshToken.for_user(user)
-                return Response({
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'user': UserSerializer(user).data
-                })
-            return Response(
-                {'error': 'Invalid credentials'}, 
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            # Find user by employee_id
+            try:
+                user = User.objects.get(employee_id=employee_id, is_active=True)
+                if user.check_password(password):
+                    refresh = RefreshToken.for_user(user)
+                    return Response({
+                        'refresh': str(refresh),
+                        'access': str(refresh.access_token),
+                        'user': UserSerializer(user).data
+                    })
+                else:
+                    return Response(
+                        {'error': 'Invalid credentials'}, 
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+            except User.DoesNotExist:
+                return Response(
+                    {'error': 'Invalid credentials'}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
@@ -344,6 +352,26 @@ class UserViewSet(viewsets.ModelViewSet):
         )
         
         return Response({'success': 'Account unlocked successfully'})
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def force_logout(self, request, pk=None):
+        """Force logout a user by clearing their session"""
+        user = self.get_object()
+        
+        # Mark user as not logged in
+        user.is_logged_in = False
+        user.last_activity = timezone.now()
+        user.save()
+        
+        # Log the forced logout
+        UserActivityLog.objects.create(
+            user=request.user,
+            action='force_logout',
+            description=f'Forced logout for user {user.email}',
+            affected_user=user
+        )
+        
+        return Response({'success': 'User has been logged out successfully'})
     
     @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
     def import_users(self, request):

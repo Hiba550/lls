@@ -20,7 +20,6 @@ const ItemForm = ({ initialData, onSubmit, onCancel, items, handleAddBomComponen
     rev_reason: initialData?.rev_reason || '',
     rev_no: initialData?.rev_no || 0,
     customer_complaint_info: initialData?.customer_complaint_info || '',
-    quantity: initialData?.quantity || 0,
     image: initialData?.image || null,
   });
 
@@ -29,7 +28,6 @@ const ItemForm = ({ initialData, onSubmit, onCancel, items, handleAddBomComponen
     description: '',
     type: 'Part',
     uom: 'Nos',
-    quantity: 0,
     sno: '',
     product: '',
     code: '',
@@ -518,18 +516,6 @@ const ItemForm = ({ initialData, onSubmit, onCancel, items, handleAddBomComponen
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 rows="3"
               ></textarea>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-              <input
-                type="number"
-                name="quantity"
-                min="0"
-                value={formData.quantity}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
             </div>
           </div>
 

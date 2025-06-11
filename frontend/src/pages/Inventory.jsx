@@ -408,16 +408,6 @@ const Inventory = () => {
                 </th>
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('quantity')}
-                >
-                  Quantity
-                  {sortField === 'quantity' && (
-                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </th>
-                <th
-                  scope="col"
                   className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Actions
@@ -427,7 +417,7 @@ const Inventory = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center">
+                  <td colSpan="6" className="px-6 py-4 text-center">
                     <div className="flex justify-center items-center">
                       <svg
                         className="animate-spin h-5 w-5 mr-3 text-blue-500"
@@ -455,7 +445,7 @@ const Inventory = () => {
                 </tr>
               ) : sortedItems.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
                     {searchTerm ? 'No items match your search.' : 'No items found. Add some items to get started.'}
                   </td>
                 </tr>
@@ -476,9 +466,6 @@ const Inventory = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {item.uom}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.quantity}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
                       <div className="flex justify-center space-x-4">
@@ -613,11 +600,6 @@ const Inventory = () => {
                 <div className="md:col-span-2">
                   <p className="text-sm font-medium text-gray-500">Customer Complaint Info</p>
                   <p className="mt-1">{selectedItem.customer_complaint_info || '-'}</p>
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Quantity</p>
-                  <p className="mt-1">{selectedItem.quantity}</p>
                 </div>
               </div>
 

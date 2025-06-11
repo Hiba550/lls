@@ -36,7 +36,7 @@ AUTH_USER_MODEL = 'users.User'
 
 # Custom authentication backends
 AUTHENTICATION_BACKENDS = [
-    'users.auth.EmailBackend',  # Our custom email authentication backend
+    'users.auth.EmployeeIdBackend',  # Our custom employee_id authentication backend
     'django.contrib.auth.backends.ModelBackend',  # Django's default backend
 ]
 

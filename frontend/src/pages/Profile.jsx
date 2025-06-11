@@ -8,6 +8,7 @@ function Profile() {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
+    employee_id: '',
     department: '',
     phone_number: ''
   });
@@ -32,6 +33,7 @@ function Profile() {
         setFormData({
           full_name: userData.full_name || '',
           email: userData.email || '',
+          employee_id: userData.employee_id || '',
           department: userData.department || '',
           phone_number: userData.phone_number || ''
         });
@@ -124,6 +126,19 @@ function Profile() {
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-neutral-800 py-2 px-3 shadow-sm opacity-75"
               />
               <p className="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Employee ID</label>
+              <input
+                type="text"
+                name="employee_id"
+                value={formData.employee_id}
+                onChange={handleChange}
+                disabled
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-neutral-800 py-2 px-3 shadow-sm opacity-75"
+              />
+              <p className="mt-1 text-xs text-gray-500">Employee ID cannot be changed</p>
             </div>
             
             <div>

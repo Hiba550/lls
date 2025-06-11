@@ -194,7 +194,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True)
+    employee_id = serializers.CharField(required=True)
     password = serializers.CharField(required=True, style={'input_type': 'password'}, write_only=True)
     
 

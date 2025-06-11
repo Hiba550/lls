@@ -12,9 +12,9 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
-  const [userFormData, setUserFormData] = useState({
+  const [userToDelete, setUserToDelete] = useState(null);  const [userFormData, setUserFormData] = useState({
     email: '',
+    employee_id: '',
     full_name: '',
     password: '',
     password_confirm: '',
@@ -72,9 +72,13 @@ const UserManagement = () => {
         [field]: null
       }));
     }
-  };
-  const validateForm = () => {
+  };  const validateForm = () => {
     const errors = {};
+    
+    // Employee ID validation
+    if (!userFormData.employee_id || userFormData.employee_id.trim().length < 2) {
+      errors.employee_id = 'Employee ID is required and must be at least 2 characters';
+    }
     
     // Email validation
     if (!userFormData.email) {
@@ -95,7 +99,7 @@ const UserManagement = () => {
       errors.password = 'Password must be at least 8 characters';
     }
     
-    // Password confirmation
+    // Password confirmation (only if password is provided)
     if (userFormData.password && userFormData.password !== userFormData.password_confirm) {
       errors.password_confirm = 'Passwords do not match';
     }
@@ -126,10 +130,10 @@ const UserManagement = () => {
       const newUser = response.data || response;
       setUsers(prev => [...prev, newUser]);
       setShowUserModal(false);
-      
-      // Reset form
+        // Reset form
       setUserFormData({
         email: '',
+        employee_id: '',
         full_name: '',
         password: '',
         password_confirm: '',
@@ -143,10 +147,12 @@ const UserManagement = () => {
       toast.success('User created successfully');
     } catch (error) {
       console.error('Error creating user:', error);
-      
-      // Handle specific error types
+        // Handle specific error types
       if (error.response?.data) {
         const errorData = error.response.data;
+        if (errorData.employee_id) {
+          setFormErrors(prev => ({ ...prev, employee_id: errorData.employee_id[0] || 'Employee ID error' }));
+        }
         if (errorData.email) {
           setFormErrors(prev => ({ ...prev, email: errorData.email[0] || 'Email error' }));
         }
@@ -165,11 +171,11 @@ const UserManagement = () => {
       setLoading(false);
     }
   };
-
   const handleEditUser = (user) => {
     setSelectedUser(user);
     setUserFormData({
       email: user.email,
+      employee_id: user.employee_id || '',
       full_name: user.full_name || '',
       password: '',
       password_confirm: '',
@@ -181,7 +187,6 @@ const UserManagement = () => {
     setFormErrors({});
     setShowUserModal(true);
   };
-
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     
@@ -200,25 +205,58 @@ const UserManagement = () => {
         delete updateData.password;
       }
       
-      // Email cannot be changed, remove it from update data
+      // For editing, don't change email as it's unique identifier
       delete updateData.email;
       
       const response = await userApi.updateUser(selectedUser.id, updateData);
+      const updatedUser = response.data || response;
       
-      // Update users list
+      // Update users list with the updated user data
       setUsers(prev => prev.map(user => 
-        user.id === selectedUser.id ? response.data : user
+        user.id === selectedUser.id ? updatedUser : user
       ));
       
       setShowUserModal(false);
       setSelectedUser(null);
       
+      // Reset form
+      setUserFormData({
+        email: '',
+        employee_id: '',
+        full_name: '',
+        password: '',
+        password_confirm: '',
+        department: '',
+        user_type: 'worker',
+        phone_number: '',
+        is_active: true
+      });
+      setFormErrors({});
+      
       toast.success('User updated successfully');
     } catch (error) {
       console.error('Error updating user:', error);
-      toast.error('Failed to update user: ' + 
-                 (error.response?.data?.detail || error.message || 'Please try again.'));
-    } finally {
+      
+      // Handle specific error types
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        if (errorData.employee_id) {
+          setFormErrors(prev => ({ ...prev, employee_id: errorData.employee_id[0] || 'Employee ID error' }));
+        }
+        if (errorData.full_name) {
+          setFormErrors(prev => ({ ...prev, full_name: errorData.full_name[0] || 'Full name error' }));
+        }
+        if (errorData.password) {
+          setFormErrors(prev => ({ ...prev, password: errorData.password[0] || 'Password error' }));
+        }
+        
+        const errorMessage = errorData.detail || 
+                            errorData.non_field_errors?.[0] ||
+                            'Failed to update user. Please check the form for errors.';
+        toast.error(errorMessage);
+      } else {
+        toast.error('Failed to update user. Please try again.');
+      }    } finally {
       setLoading(false);
     }
   };
@@ -436,11 +474,11 @@ const UserManagement = () => {
         className="flex justify-between items-center"
       >
         <h2 className="text-2xl font-bold text-gray-800 dark:text-white">User Management</h2>
-        <button
-          onClick={() => {
+        <button          onClick={() => {
             setSelectedUser(null);
             setUserFormData({
               email: '',
+              employee_id: '',
               full_name: '',
               password: '',
               password_confirm: '',
@@ -552,9 +590,15 @@ const UserManagement = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">              <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
+                  <th 
+                    scope="col" 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('employee_id')}
+                  >
+                    Employee ID <SortIndicator field="employee_id" />
+                  </th>
                   <th 
                     scope="col" 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
@@ -594,10 +638,14 @@ const UserManagement = () => {
                     Actions
                   </th>
                 </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              </thead>              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {paginatedUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {user.employee_id || 'N/A'}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
@@ -606,7 +654,7 @@ const UserManagement = () => {
                           ) : (
                             <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                               <span className="font-medium text-gray-600 dark:text-gray-300">
-                                {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                                {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.employee_id ? user.employee_id.charAt(0).toUpperCase() : 'U'}
                               </span>
                             </div>
                           )}
@@ -806,11 +854,26 @@ const UserManagement = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-            </div>
-
-            <form onSubmit={selectedUser ? handleUpdateUser : handleCreateUser}>
+            </div>            <form onSubmit={selectedUser ? handleUpdateUser : handleCreateUser}>
               <div className="space-y-4">
                 <div>
+                  <label htmlFor="employee_id" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Employee ID*
+                  </label>
+                  <input
+                    type="text"
+                    id="employee_id"
+                    name="employee_id"
+                    value={userFormData.employee_id}
+                    onChange={(e) => handleUserFormChange('employee_id', e.target.value)}
+                    className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white ${
+                      formErrors.employee_id ? 'border-red-500' : ''
+                    }`}
+                  />
+                  {formErrors.employee_id && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-500">{formErrors.employee_id}</p>
+                  )}
+                </div>                <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Email*
                   </label>
@@ -820,11 +883,16 @@ const UserManagement = () => {
                     name="email"
                     value={userFormData.email}
                     onChange={(e) => handleUserFormChange('email', e.target.value)}
-                    disabled={selectedUser}
+                    disabled={selectedUser} // Disable email editing
                     className={`mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                      selectedUser ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' : 'border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+                      selectedUser 
+                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600' 
+                        : 'border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white'
                     } ${formErrors.email ? 'border-red-500' : ''}`}
                   />
+                  {selectedUser && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Email cannot be changed</p>
+                  )}
                   {formErrors.email && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-500">{formErrors.email}</p>
                   )}
@@ -847,20 +915,30 @@ const UserManagement = () => {
                   {formErrors.full_name && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-500">{formErrors.full_name}</p>
                   )}
-                </div>
-
-                <div>
+                </div>                <div>
                   <label htmlFor="department" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Department
                   </label>
-                  <input
-                    type="text"
+                  <select
                     id="department"
                     name="department"
                     value={userFormData.department}
                     onChange={(e) => handleUserFormChange('department', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                  />
+                  >
+                    <option value="">Select Department</option>
+                    <option value="production">Production</option>
+                    <option value="quality">Quality Control</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="planning">Production Planning</option>
+                    <option value="admin">Administration</option>
+                    <option value="it">Information Technology</option>
+                    <option value="logistics">Logistics</option>
+                    <option value="engineering">Engineering</option>
+                    <option value="finance">Finance</option>
+                    <option value="hr">Human Resources</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
 
                 <div>

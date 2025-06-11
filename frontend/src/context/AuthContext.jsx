@@ -52,10 +52,10 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Login function
-  const login = async (email, password) => {
+  const login = async (employee_id, password) => {
     try {
       setLoading(true);
-      const response = await userApi.login({ email, password });
+      const response = await userApi.login({ employee_id, password });
       
       // Store tokens
       localStorage.setItem('authToken', response.access);

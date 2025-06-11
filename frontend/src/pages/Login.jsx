@@ -11,7 +11,7 @@ const Login = () => {
   const [darkMode, setDarkMode] = useState(false);
 
   const [formData, setFormData] = useState({
-    email: '',
+    employee_id: '',
     password: '',
   });
   const [errors, setErrors] = useState({});
@@ -65,10 +65,8 @@ const Login = () => {
   const validate = () => {
     const newErrors = {};
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    if (!formData.employee_id.trim()) {
+      newErrors.employee_id = 'Employee ID is required';
     }
 
     if (!formData.password) {
@@ -89,14 +87,14 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      await login(formData.email, formData.password);
+      await login(formData.employee_id, formData.password);
       toast.success('Login successful');
       navigate('/');
     } catch (error) {
       const errorMessage =
         error.response?.data?.error ||
         error.response?.data?.detail ||
-        'Invalid email or password. Please try again.';
+        'Invalid employee ID or password. Please try again.';
 
       toast.error(errorMessage);
       setErrors({ general: errorMessage });
@@ -188,29 +186,29 @@ const Login = () => {
           <div className="space-y-4 rounded-md -space-y-px">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="employee_id"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Email address
+                Employee ID
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="employee_id"
+                name="employee_id"
+                type="text"
+                autoComplete="username"
                 required
-                value={formData.email}
+                value={formData.employee_id}
                 onChange={handleChange}
                 className={`appearance-none relative block w-full px-3 py-2 border ${
-                  errors.email
+                  errors.employee_id
                     ? 'border-red-300 dark:border-red-700'
                     : 'border-gray-300 dark:border-gray-700'
                 } placeholder-gray-500 text-gray-900 dark:text-white dark:bg-gray-700 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="Email address"
+                placeholder="Enter your Employee ID"
               />
-              {errors.email && (
+              {errors.employee_id && (
                 <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                  {errors.email}
+                  {errors.employee_id}
                 </p>
               )}
             </div>
