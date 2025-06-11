@@ -3,6 +3,7 @@ import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { handleLogout } from '../api/userApi'; // Import the logout function
 import { toast } from 'react-toastify';  // or your toast library
+import notificationApi from '../api/notificationApi';
 // Performance optimized version of TopNavigation
 // Uses React.memo and useCallback to prevent unnecessary re-renders
 const TopNavigation = memo(({ companyName = "Assembly Management" }) => {
@@ -16,6 +17,10 @@ const TopNavigation = memo(({ companyName = "Assembly Management" }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   // Add state for current user
   const [currentUser, setCurrentUser] = useState(null);
+  // Add comprehensive notification state
+  const [notifications, setNotifications] = useState([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   // Refs for click outside detection
   const userDropdownRef = useRef(null);
@@ -144,33 +149,203 @@ const TopNavigation = memo(({ companyName = "Assembly Management" }) => {
     return currentUser.email ? currentUser.email[0].toUpperCase() : "U";
   }, [currentUser]);
 
-  // Mock notifications - In a production app, these would come from an API
-  const notifications = [
-    { 
-      id: 1, 
-      type: 'alert', 
-      title: 'QA: RSM unit #307',
-      message: 'Inspection required', 
-      time: '3m ago',
-      read: false
-    },
-    { 
-      id: 2, 
-      type: 'success', 
-      title: 'WO #1234 completed',
-      message: 'Assembly successful', 
-      time: '1h ago',
-      read: false 
-    },
-    { 
-      id: 3, 
-      type: 'info', 
-      title: 'New RSM scheduled',
-      message: 'Production line task assigned', 
-      time: '2h ago',
-      read: true 
+  // Notification management functions
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setNotificationLoading(true);
+      
+      // Use real API instead of mock data
+      const response = await notificationApi.getNotifications({
+        page_size: 20, // Limit to 20 most recent notifications
+        ordering: '-created_at' // Most recent first
+      });
+      
+      // Transform backend data to match frontend format
+      const transformedNotifications = response.results.map(notification => ({
+        id: notification.id,
+        type: notification.notification_type,
+        title: notification.title,
+        message: notification.message,
+        time: notification.created_at,
+        read: notification.is_read,
+        category: notification.notification_type,
+        priority: notification.priority,
+        actionUrl: notification.action_url
+      }));
+      
+      setNotifications(transformedNotifications);
+      setUnreadCount(transformedNotifications.filter(n => !n.read).length);
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+      
+      // Fallback to mock data if API fails
+      const mockNotifications = [
+        {
+          id: 1,
+          type: 'warning',
+          title: 'Quality Alert',
+          message: 'RSM unit #307 requires inspection',
+          time: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+          read: false,
+          category: 'quality',
+          priority: 'high',
+          actionUrl: '/assembly/rsm/307'
+        },
+        {
+          id: 2,
+          type: 'success',
+          title: 'Work Order Completed',
+          message: 'WO #1234 assembly completed successfully',
+          time: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          read: false,
+          category: 'production',
+          priority: 'medium',
+          actionUrl: '/work-orders/1234'
+        },
+        {
+          id: 3,
+          type: 'info',
+          title: 'New Assignment',
+          message: 'YBS assembly task assigned to your queue',
+          time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          read: true,
+          category: 'assignment',
+          priority: 'low',
+          actionUrl: '/assembly/ybs'
+        }
+      ];
+      
+      setNotifications(mockNotifications);
+      setUnreadCount(mockNotifications.filter(n => !n.read).length);
+      toast.error('Failed to load notifications - using offline data');
+    } finally {
+      setNotificationLoading(false);
     }
-  ];
+  }, []);
+
+  // Mark notification as read
+  const markAsRead = useCallback(async (notificationId) => {
+    try {
+      // Use real API
+      await notificationApi.markAsRead(notificationId);
+      
+      setNotifications(prev => prev.map(notification => 
+        notification.id === notificationId 
+          ? { ...notification, read: true }
+          : notification
+      ));
+      
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+      toast.error('Failed to update notification');
+    }
+  }, []);
+
+  // Mark all notifications as read
+  const markAllAsRead = useCallback(async () => {
+    try {
+      // Use real API
+      await notificationApi.markAllAsRead();
+      
+      setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+      setUnreadCount(0);
+      toast.success('All notifications marked as read');
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+      toast.error('Failed to update notifications');
+    }
+  }, []);
+
+  // Delete notification
+  const deleteNotification = useCallback(async (notificationId) => {
+    try {
+      // Use real API
+      await notificationApi.deleteNotification(notificationId);
+      
+      const notificationToDelete = notifications.find(n => n.id === notificationId);
+      setNotifications(prev => prev.filter(notification => notification.id !== notificationId));
+      
+      if (notificationToDelete && !notificationToDelete.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+      
+      toast.success('Notification deleted');
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+      toast.error('Failed to delete notification');
+    }
+  }, [notifications]);
+
+  // Handle notification click
+  const handleNotificationClick = useCallback((notification) => {
+    if (!notification.read) {
+      markAsRead(notification.id);
+    }
+    
+    if (notification.actionUrl) {
+      navigate(notification.actionUrl);
+      setNotificationsOpen(false);
+    }
+  }, [navigate, markAsRead]);
+
+  // Format time for notifications
+  const formatNotificationTime = useCallback((timeString) => {
+    const time = new Date(timeString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - time) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    return time.toLocaleDateString();
+  }, []);
+
+  // Get notification icon
+  const getNotificationIcon = useCallback((type) => {
+    switch (type) {
+      case 'success':
+        return (
+          <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'warning':
+        return (
+          <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+        );
+      case 'error':
+        return (
+          <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+        );
+      default: // info
+        return (
+          <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+        );
+    }
+  }, []);
+
+  // Load notifications on component mount
+  useEffect(() => {
+    fetchNotifications();
+    
+    // Set up auto-refresh for notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   // Simplified menu items structure
   const menuItems = [
@@ -528,8 +703,14 @@ const TopNavigation = memo(({ companyName = "Assembly Management" }) => {
                       )}
 
                       <div className="px-4 py-2 border-t border-neutral-200 dark:border-neutral-700">
-                        <button className="w-full text-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
-                          View all
+                        <button 
+                          onClick={() => {
+                            navigate('/notifications');
+                            setNotificationsOpen(false);
+                          }}
+                          className="w-full text-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                        >
+                          View all notifications
                         </button>
                       </div>
                     </div>

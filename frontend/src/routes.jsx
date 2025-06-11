@@ -16,6 +16,7 @@ import WorkOrders from './pages/WorkOrders';
 import WorkOrderForm from './pages/WorkOrderForm';
 import WorkOrderManagement from './pages/WorkOrderManagement';
 import UserProfile from './pages/UserProfile'; // Add this import
+import Notifications from './pages/Notifications';
 
 // Assembly pages
 import YBSAssemblyManager from './pages/YBSAssemblyManager';
@@ -135,6 +136,8 @@ export default function AppRoutes() {
           <Route path="settings" element={<Settings />} />
           <Route path="packing" element={<Packing />} />
           
+          {/* Notifications */}
+          <Route path="notifications" element={<Notifications />} />
           
           {/* Search Results */}
           <Route path="search" element={<WorkOrders isSearchResults={true} />} />

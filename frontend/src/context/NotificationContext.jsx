@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast, ToastContainer } from 'react-toastify';
+import NotificationContainer from '../components/NotificationContainer';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Create the context
@@ -17,9 +18,10 @@ export const useNotificationContext = () => {
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
+  const [customNotifications, setCustomNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Add a new notification
+  // Add a new notification to the navbar/dropdown
   const addNotification = useCallback((notification) => {
     const newNotification = {
       id: Date.now().toString(),
@@ -31,11 +33,34 @@ export const NotificationProvider = ({ children }) => {
     setNotifications(prev => [newNotification, ...prev]);
     setUnreadCount(count => count + 1);
     
-    // Also show toast notification
-    const toastType = notification.type || 'info';
-    toast[toastType](notification.message || notification.title);
+    return newNotification.id;
+  }, []);
+
+  // Add a custom floating notification
+  const addCustomNotification = useCallback((notification) => {
+    const newNotification = {
+      id: Date.now().toString() + Math.random(),
+      duration: 5000,
+      position: 'top-right',
+      showCloseButton: true,
+      ...notification,
+    };
+    
+    setCustomNotifications(prev => [newNotification, ...prev]);
+    
+    // Auto remove after duration
+    if (newNotification.duration > 0) {
+      setTimeout(() => {
+        deleteCustomNotification(newNotification.id);
+      }, newNotification.duration);
+    }
     
     return newNotification.id;
+  }, []);
+
+  // Delete a custom notification
+  const deleteCustomNotification = useCallback((id) => {
+    setCustomNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
   // Mark a notification as read
@@ -80,42 +105,103 @@ export const NotificationProvider = ({ children }) => {
       return 'Unknown time';
     }
   }, []);
-
   // Success notification helper
-  const success = useCallback((message, title = "Success") => {
+  const success = useCallback((message, title = "Success", options = {}) => {
+    const { useToast = true, useCustom = true } = options;
+    
+    if (useToast) {
+      toast.success(message);
+    }
+    
+    if (useCustom) {
+      return addCustomNotification({
+        type: 'success',
+        title,
+        message,
+        ...options,
+      });
+    }
+    
     return addNotification({
       type: 'success',
       title,
       message,
     });
-  }, [addNotification]);
+  }, [addNotification, addCustomNotification]);
 
   // Error notification helper
-  const error = useCallback((message, title = "Error") => {
+  const error = useCallback((message, title = "Error", options = {}) => {
+    const { useToast = true, useCustom = true } = options;
+    
+    if (useToast) {
+      toast.error(message);
+    }
+    
+    if (useCustom) {
+      return addCustomNotification({
+        type: 'error',
+        title,
+        message,
+        duration: 7000, // Error messages stay longer
+        ...options,
+      });
+    }
+    
     return addNotification({
       type: 'error',
       title,
       message,
     });
-  }, [addNotification]);
+  }, [addNotification, addCustomNotification]);
 
   // Info notification helper
-  const info = useCallback((message, title = "Information") => {
+  const info = useCallback((message, title = "Information", options = {}) => {
+    const { useToast = true, useCustom = true } = options;
+    
+    if (useToast) {
+      toast.info(message);
+    }
+    
+    if (useCustom) {
+      return addCustomNotification({
+        type: 'info',
+        title,
+        message,
+        ...options,
+      });
+    }
+    
     return addNotification({
       type: 'info',
       title,
       message,
     });
-  }, [addNotification]);
+  }, [addNotification, addCustomNotification]);
 
   // Warning notification helper
-  const warning = useCallback((message, title = "Warning") => {
+  const warning = useCallback((message, title = "Warning", options = {}) => {
+    const { useToast = true, useCustom = true } = options;
+    
+    if (useToast) {
+      toast.warning(message);
+    }
+    
+    if (useCustom) {
+      return addCustomNotification({
+        type: 'warning',
+        title,
+        message,
+        duration: 6000, // Warning messages stay a bit longer
+        ...options,
+      });
+    }
+    
     return addNotification({
       type: 'warning',
       title,
       message,
     });
-  }, [addNotification]);
+  }, [addNotification, addCustomNotification]);
 
   const value = {
     notifications,

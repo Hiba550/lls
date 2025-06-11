@@ -18,7 +18,6 @@ const UserManagement = () => {
     full_name: '',
     password: '',
     password_confirm: '',
-    department: '',
     user_type: 'worker', // Only allow admin, planner, worker
     phone_number: '',
     is_active: true
@@ -40,13 +39,25 @@ const UserManagement = () => {
     if (isAdmin) {
       fetchUsers();
     }
-  }, [isAdmin]);
-  const fetchUsers = async () => {
+  }, [isAdmin]);  const fetchUsers = async () => {
     try {
       setLoading(true);
       const response = await userApi.getAllUsers();
-      const usersData = response.data || response;
-      setUsers(Array.isArray(usersData) ? usersData : []);
+      
+      // Handle paginated response structure
+      let usersData;
+      if (response.results) {
+        // Paginated response
+        usersData = response.results;
+      } else if (Array.isArray(response)) {
+        // Direct array response
+        usersData = response;
+      } else {
+        // Fallback
+        usersData = [];
+      }
+      
+      setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
       const errorMessage = error.response?.data?.detail || 
@@ -75,9 +86,9 @@ const UserManagement = () => {
   };  const validateForm = () => {
     const errors = {};
     
-    // Employee ID validation
-    if (!userFormData.employee_id || userFormData.employee_id.trim().length < 2) {
-      errors.employee_id = 'Employee ID is required and must be at least 2 characters';
+    // Employee ID validation (optional)
+    if (userFormData.employee_id && userFormData.employee_id.trim() && userFormData.employee_id.trim().length < 2) {
+      errors.employee_id = 'Employee ID must be at least 2 characters if provided';
     }
     
     // Email validation
@@ -118,18 +129,18 @@ const UserManagement = () => {
     
     if (!validateForm()) {
       return;
-    }
-
-    try {
-      setLoading(true);
-      // Remove confirm password field for API
+    }    try {
+      setLoading(true);      // Remove confirm password field for API
       const userData = { ...userFormData };
       delete userData.password_confirm;
-
+      
+      // Convert empty employee_id to null for proper database handling
+      if (!userData.employee_id || userData.employee_id.trim() === '') {
+        userData.employee_id = null;
+      }      console.log('User data being sent to API:', userData);
       const response = await userApi.createUser(userData);
-      const newUser = response.data || response;
-      setUsers(prev => [...prev, newUser]);
-      setShowUserModal(false);
+      const newUser = response; // apiClient already extracts .data
+      setUsers(prev => [...prev, newUser]);setShowUserModal(false);
         // Reset form
       setUserFormData({
         email: '',
@@ -137,7 +148,6 @@ const UserManagement = () => {
         full_name: '',
         password: '',
         password_confirm: '',
-        department: '',
         user_type: 'worker',
         phone_number: '',
         is_active: true
@@ -172,14 +182,12 @@ const UserManagement = () => {
     }
   };
   const handleEditUser = (user) => {
-    setSelectedUser(user);
-    setUserFormData({
+    setSelectedUser(user);    setUserFormData({
       email: user.email,
       employee_id: user.employee_id || '',
       full_name: user.full_name || '',
       password: '',
       password_confirm: '',
-      department: user.department || '',
       user_type: user.user_type || 'worker',
       phone_number: user.phone_number || '',
       is_active: user.is_active
@@ -192,9 +200,7 @@ const UserManagement = () => {
     
     if (!validateForm()) {
       return;
-    }
-
-    try {
+    }    try {
       setLoading(true);
       // Remove confirm password field for API
       const updateData = {...userFormData};
@@ -208,8 +214,12 @@ const UserManagement = () => {
       // For editing, don't change email as it's unique identifier
       delete updateData.email;
       
-      const response = await userApi.updateUser(selectedUser.id, updateData);
-      const updatedUser = response.data || response;
+      // Convert empty employee_id to null for proper database handling
+      if (!updateData.employee_id || updateData.employee_id.trim() === '') {
+        updateData.employee_id = null;
+      }
+        const response = await userApi.updateUser(selectedUser.id, updateData);
+      const updatedUser = response; // apiClient already extracts .data
       
       // Update users list with the updated user data
       setUsers(prev => prev.map(user => 
@@ -218,15 +228,13 @@ const UserManagement = () => {
       
       setShowUserModal(false);
       setSelectedUser(null);
-      
-      // Reset form
+        // Reset form
       setUserFormData({
         email: '',
         employee_id: '',
         full_name: '',
         password: '',
         password_confirm: '',
-        department: '',
         user_type: 'worker',
         phone_number: '',
         is_active: true
@@ -291,14 +299,13 @@ const UserManagement = () => {
 
   const toggleUserStatus = async (user) => {
     try {
-      setLoading(true);
-      const updatedUser = await userApi.updateUser(user.id, {
+      setLoading(true);      const updatedUser = await userApi.updateUser(user.id, {
         is_active: !user.is_active
       });
       
       // Update users list
       setUsers(prev => prev.map(u => 
-        u.id === updatedUser.data.id ? updatedUser.data : u
+        u.id === updatedUser.id ? updatedUser : u
       ));
       
       toast.success(`User ${updatedUser.data.is_active ? 'activated' : 'deactivated'} successfully`);
@@ -332,12 +339,10 @@ const UserManagement = () => {
   };
   
   // Filter and sort users
-  const filteredUsers = users.filter(user => {
-    // Search by name or email
+  const filteredUsers = users.filter(user => {    // Search by name or email
     const matchesSearch = searchQuery === '' || 
       user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.department?.toLowerCase().includes(searchQuery.toLowerCase());
+      user.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
     
     // Filter by user type
     const matchesUserType = filterUserType === 'all' || user.user_type === filterUserType;
@@ -476,17 +481,15 @@ const UserManagement = () => {
         <h2 className="text-2xl font-bold text-gray-800 dark:text-white">User Management</h2>
         <button          onClick={() => {
             setSelectedUser(null);
-            setUserFormData({
-              email: '',
-              employee_id: '',
-              full_name: '',
-              password: '',
-              password_confirm: '',
-              department: '',
-              user_type: 'worker',
-              phone_number: '',
-              is_active: true
-            });
+            setUserFormData({            email: '',
+            employee_id: '',
+            full_name: '',
+            password: '',
+            password_confirm: '',
+            user_type: 'worker',
+            phone_number: '',
+            is_active: true
+          });
             setFormErrors({});
             setShowUserModal(true);
           }}
@@ -588,9 +591,9 @@ const UserManagement = () => {
             </svg>
             <p className="mt-4 text-gray-500 dark:text-gray-400">No users found matching your filters</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">              <thead className="bg-gray-50 dark:bg-gray-900">
+        ) : (          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
                   <th 
                     scope="col" 
@@ -636,9 +639,9 @@ const UserManagement = () => {
                   </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
-                  </th>
-                </tr>
-              </thead>              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  </th>                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {paginatedUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -658,10 +661,9 @@ const UserManagement = () => {
                               </span>
                             </div>
                           )}
-                        </div>
-                        <div className="ml-4">
+                        </div>                        <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">{user.full_name || 'N/A'}</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">{user.department || 'No department'}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{user.employee_id || 'No employee ID'}</div>
                         </div>
                       </div>
                     </td>
@@ -855,10 +857,9 @@ const UserManagement = () => {
                 </svg>
               </button>
             </div>            <form onSubmit={selectedUser ? handleUpdateUser : handleCreateUser}>
-              <div className="space-y-4">
-                <div>
+              <div className="space-y-4">                <div>
                   <label htmlFor="employee_id" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Employee ID*
+                    Employee ID (Optional)
                   </label>
                   <input
                     type="text"
@@ -914,32 +915,7 @@ const UserManagement = () => {
                   />
                   {formErrors.full_name && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-500">{formErrors.full_name}</p>
-                  )}
-                </div>                <div>
-                  <label htmlFor="department" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Department
-                  </label>
-                  <select
-                    id="department"
-                    name="department"
-                    value={userFormData.department}
-                    onChange={(e) => handleUserFormChange('department', e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="">Select Department</option>
-                    <option value="production">Production</option>
-                    <option value="quality">Quality Control</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="planning">Production Planning</option>
-                    <option value="admin">Administration</option>
-                    <option value="it">Information Technology</option>
-                    <option value="logistics">Logistics</option>
-                    <option value="engineering">Engineering</option>
-                    <option value="finance">Finance</option>
-                    <option value="hr">Human Resources</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
+                  )}                </div>
 
                 <div>
                   <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
