@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'backend.apps.item_master',
     'backend.apps.work_order',
     'backend.apps.assembly',
+    'backend.apps.notification_system',
     'users',  # Add the users app
 ]
 
@@ -154,6 +155,8 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 # JWT settings

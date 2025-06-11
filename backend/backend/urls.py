@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/', include('backend.apps.assembly.urls')),
     path('api/', include('backend.apps.work_order.urls')),
+    path('api/', include('backend.apps.notification_system.urls')),  # Include notification system URLs
     path('api-auth/', include('rest_framework.urls')),
     path('api/', include('users.urls')),  # Include the user management URLs
     

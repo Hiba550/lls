@@ -1,0 +1,1 @@
+default_app_config = 'backend.apps.notification_system.apps.NotificationSystemConfig'

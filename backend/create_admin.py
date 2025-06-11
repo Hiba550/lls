@@ -38,8 +38,7 @@ def create_admin_user():
             email=email,
             full_name=full_name,
             password=password,
-            user_type='admin',
-            department='admin'
+            user_type='admin'
         )
         
         print(f"\nAdmin user created successfully!\n")

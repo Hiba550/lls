@@ -102,27 +102,40 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    password_confirm = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})
     
     class Meta:
         model = User
-        fields = ['email', 'password', 'password_confirm', 'full_name', 'department', 
+        fields = ['email', 'password', 'password_confirm', 'full_name', 
                  'user_type', 'phone_number', 'employee_id', 'supervisor', 'emergency_contact',
                  'notes', 'status']
     
     def validate(self, attrs):
-        if attrs.get('password') != attrs.get('password_confirm'):
+        password = attrs.get('password')
+        password_confirm = attrs.get('password_confirm')
+        
+        # Only validate password confirmation if it's provided
+        if password_confirm and password != password_confirm:
             raise serializers.ValidationError({"password": "Password fields don't match."})
         
         # Validate employee ID uniqueness if provided
-        if attrs.get('employee_id'):
-            if User.objects.filter(employee_id=attrs['employee_id']).exists():
-                raise serializers.ValidationError({"employee_id": "Employee ID already exists."})
+        employee_id = attrs.get('employee_id')
+        if employee_id:
+            # Convert empty string to None for proper null handling
+            if employee_id.strip() == '':
+                attrs['employee_id'] = None
+            else:
+                if User.objects.filter(employee_id=employee_id).exists():
+                    raise serializers.ValidationError({"employee_id": "Employee ID already exists."})
+        else:
+            # Ensure None instead of empty string for null handling
+            attrs['employee_id'] = None
         
         return attrs
     
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
+        # Remove password_confirm safely (it might not always be present)
+        validated_data.pop('password_confirm', None)
         password = validated_data.pop('password')
         
         # Set created_by if available in context

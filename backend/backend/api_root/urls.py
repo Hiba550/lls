@@ -10,4 +10,5 @@ router.register(r'item-master', ItemMasterViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('notification-system/', include('backend.apps.notification_system.urls')),
 ]
