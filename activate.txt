@@ -21,7 +21,6 @@ print(f"User active status: {admin.is_active}")
 print(f"User is_staff: {admin.is_staff}")
 print(f"User is_superuser: {admin.is_superuser}")
 
-#Option2
 
 
 from django.contrib.auth import get_user_model
