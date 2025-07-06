@@ -1,3 +1,4 @@
+:: bat script
 @echo off
 
 :: Open first terminal for backend
