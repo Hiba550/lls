@@ -1,6 +1,6 @@
 from users.models import User
 
-# Option 1: Reactivate existing admin
+# Option1 : Reactivate existing admin
 try:
     admin = User.objects.get(email='admin@example.com')
     admin.is_active = True
